@@ -7,6 +7,8 @@ pub mod futures;
 mod join_set;
 pub mod runtime;
 pub mod task;
+#[cfg(feature = "thread-simulator")]
+mod workers;
 
 /// The branch a non-biased `select!` polls first, among `branches`: drawn from the run's seeded
 /// generator (as `tokio::select!` draws its own), so which ready branch wins replays by seed.

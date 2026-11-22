@@ -224,3 +224,137 @@ fn a_task_can_spawn_onto_another_runtime_and_drive_it() {
         assert_eq!(value, 3, "seed {seed}");
     }
 }
+
+/// Several workers (a multi-thread runtime needs `rt-multi-thread`).
+#[cfg(feature = "rt-multi-thread")]
+mod workers {
+    use super::*;
+
+    /// A multi-thread runtime of `workers` workers.
+    fn multi(workers: usize) -> Runtime {
+        let mut builder = switchy_async::Builder::new();
+        builder
+            .flavor(switchy_async::RuntimeFlavor::MultiThread)
+            .worker_threads(workers);
+        builder.build().unwrap()
+    }
+
+    /// Two tasks take two locks in opposite orders, with no await in between: only tasks running
+    /// at once can interleave them. Whether the run deadlocked.
+    fn opposite_lock_orders(seed: u64, workers: usize) -> bool {
+        let outcome = simulator::run(seed, || {
+            let runtime = multi(workers);
+            let (a, b) = (Arc::new(Mutex::new(())), Arc::new(Mutex::new(())));
+            runtime.block_on(async move {
+                let first = {
+                    let (a, b) = (Arc::clone(&a), Arc::clone(&b));
+                    switchy_async::task::spawn(async move {
+                        let _a = a.lock().unwrap();
+                        let _b = b.lock().unwrap();
+                    })
+                };
+                let second = switchy_async::task::spawn(async move {
+                    let _b = b.lock().unwrap();
+                    let _a = a.lock().unwrap();
+                });
+                first.await.unwrap();
+                second.await.unwrap();
+            });
+        });
+        outcome.result.is_err()
+    }
+
+    #[test]
+    fn several_workers_interleave_tasks_between_their_awaits() {
+        let deadlocks = |workers| {
+            (0..40)
+                .filter(|&seed| opposite_lock_orders(seed, workers))
+                .count()
+        };
+        assert_eq!(
+            deadlocks(1),
+            0,
+            "one worker runs a task to its next await alone"
+        );
+        assert!(deadlocks(2) > 0, "two workers interleave two tasks' locks");
+    }
+
+    /// Two tasks increment a counter by reading and then writing it, with no await in between.
+    fn lost_update(seed: u64, workers: usize) -> (usize, u64) {
+        let (count, trace) = run_multi(seed, workers, |runtime| {
+            let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let shared =
+                switchy_thread::sync::Arc::new(switchy_thread::sync::atomic::AtomicUsize::new(0));
+            let _ = counter;
+            runtime.block_on(async move {
+                let handles: Vec<_> = (0..2)
+                    .map(|_| {
+                        let shared = switchy_thread::sync::Arc::clone(&shared);
+                        switchy_async::task::spawn(async move {
+                            use switchy_thread::sync::atomic::Ordering;
+                            let value = shared.load(Ordering::SeqCst);
+                            shared.store(value + 1, Ordering::SeqCst);
+                        })
+                    })
+                    .collect();
+                for handle in handles {
+                    handle.await.unwrap();
+                }
+                shared.load(switchy_thread::sync::atomic::Ordering::SeqCst)
+            })
+        });
+        (count, trace)
+    }
+
+    fn run_multi<R>(seed: u64, workers: usize, f: impl FnOnce(&Runtime) -> R) -> (R, u64) {
+        let outcome = simulator::run(seed, || {
+            let runtime = multi(workers);
+            let result = f(&runtime);
+            runtime.wait().unwrap();
+            result
+        });
+        assert!(outcome.report.leaked.is_empty(), "{:?}", outcome.report);
+        let result = outcome
+            .result
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+        (result, outcome.report.trace_hash)
+    }
+
+    #[test]
+    fn several_workers_lose_an_update_one_never_does() {
+        assert!((0..40).all(|seed| lost_update(seed, 1).0 == 2));
+        assert!((0..40).any(|seed| lost_update(seed, 2).0 == 1));
+    }
+
+    #[test]
+    fn several_workers_replay_by_seed() {
+        for seed in 0..10 {
+            assert_eq!(lost_update(seed, 3), lost_update(seed, 3), "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn shutting_down_stops_the_workers() {
+        for seed in 0..5 {
+            let outcome = simulator::run(seed, || {
+                let runtime = multi(3);
+                let handle = runtime.handle();
+                runtime.block_on(async move {
+                    for _ in 0..3 {
+                        drop(handle.spawn(async {
+                            switchy_async::time::sleep(Duration::from_secs(3600)).await;
+                        }));
+                    }
+                    switchy_async::task::yield_now().await;
+                });
+                runtime.shutdown_now();
+            });
+            assert!(
+                outcome.report.leaked.is_empty(),
+                "seed {seed}: {:?}",
+                outcome.report
+            );
+            outcome.result.unwrap();
+        }
+    }
+}

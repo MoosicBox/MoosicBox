@@ -19,6 +19,7 @@ group = "switchy"
 [dependencies]
 switchy_async_macros = { workspace = true, optional = true }
 switchy_random       = { workspace = true, optional = true, features = ["rand"] }
+switchy_simulation   = { workspace = true, optional = true }
 switchy_thread       = { workspace = true, optional = true }
 switchy_time         = { workspace = true, optional = true, features = ["std"] }
 
@@ -81,6 +82,7 @@ tokio = ["_any_backend", "dep:futures", "dep:tokio", "dep:tokio-util"]
 # The simulator with switchy_thread's simulated threads: `spawn_blocking` runs on one, and an
 # executor with nothing to run lets them run (on the run's clock) until a waker wakes it.
 thread-simulator = [
+    "dep:switchy_simulation",
     "dep:switchy_thread",
     "simulator",
     "switchy_thread/simulator",

@@ -293,6 +293,16 @@ match handle.await {
   in `spawn_blocking` work then blocks only its own thread, and every
   interleaving of tasks and threads replays by seed.
 
+### Several Workers
+
+With `thread-simulator`, a simulator runtime polls up to `n` ready tasks at once each step,
+on simulated threads, so the synchronous code between two tasks' awaits overlaps as it does on
+a multi-thread runtime (lock-order deadlocks and read-modify-write races between tasks become
+reachable). The seeded scheduler decides every switch, so runs stay deterministic. `n` is 1 for
+a current-thread runtime, `worker_threads` for a multi-thread one, else the run's
+`SIMULATOR_ASYNC_WORKERS`: a number, or `swarm` (one run in four gets 1, the others 2 to 4).
+Unset, it is 1.
+
 ### Runtime Features
 
 - **`rt-multi-thread`**: Multi-threaded runtime support

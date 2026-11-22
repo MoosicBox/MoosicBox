@@ -18484,6 +18484,7 @@ dependencies = [
  "scoped-tls",
  "switchy_async_macros",
  "switchy_random",
+ "switchy_simulation",
  "switchy_thread",
  "switchy_time",
  "test-log",

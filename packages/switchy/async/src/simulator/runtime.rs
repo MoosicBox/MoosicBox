@@ -311,6 +311,9 @@ pub struct Runtime {
     /// The `switchy_thread` group of the simulated threads its tasks start.
     #[cfg(feature = "thread-simulator")]
     thread_group: u64,
+    /// Its number of workers, from `Builder::worker_threads`; 0 for the run's.
+    #[cfg(feature = "thread-simulator")]
+    worker_count: Arc<std::sync::atomic::AtomicUsize>,
     handle: Option<Handle>,
 }
 
@@ -386,6 +389,8 @@ impl Runtime {
             registry: Arc::new(Mutex::new(BTreeMap::new())),
             #[cfg(feature = "thread-simulator")]
             thread_group: switchy_thread::simulator::new_key(),
+            #[cfg(feature = "thread-simulator")]
+            worker_count: Arc::default(),
             handle: None,
         };
 
@@ -513,15 +518,71 @@ impl Runtime {
     }
 
     pub(crate) fn process_next_task(&self) -> bool {
+        #[cfg(feature = "thread-simulator")]
+        if let Some(processed) = self.process_batch() {
+            return processed;
+        }
         let Some(task) = self.next_task() else {
             return false;
         };
+        self.process_on_this_thread(task);
+        true
+    }
 
+    /// Run one step of `task` on the calling thread, with this runtime current.
+    pub(crate) fn process_on_this_thread(&self, task: Arc<Task>) {
         RUNTIME.set(self, || {
             self.in_thread_group(|| task.process());
         });
+    }
 
-        true
+    /// The `switchy_thread` group of the simulated threads its tasks (and workers) start.
+    #[cfg(feature = "thread-simulator")]
+    pub(crate) const fn thread_group(&self) -> u64 {
+        self.thread_group
+    }
+
+    /// With several workers, poll up to that many ready tasks at once (see `workers`), and
+    /// then the tasks that must stay on this thread. `None` when this step polls one task on
+    /// this thread, as with one executor: one worker, within such a step already, or outside
+    /// a simulation run.
+    #[cfg(feature = "thread-simulator")]
+    fn process_batch(&self) -> Option<bool> {
+        if super::workers::in_step() || switchy_thread::simulator::try_scheduler().is_none() {
+            return None;
+        }
+        let wanted = match self.worker_count.load(Ordering::SeqCst) {
+            0 => super::workers::run_workers(),
+            count => count,
+        };
+        if wanted <= 1 {
+            return None;
+        }
+        let (mut batch, mut here) = (Vec::new(), Vec::new());
+        while batch.len() < wanted {
+            let Some(task) = self.next_task() else {
+                break;
+            };
+            // A local task's future lives on this thread; a blocking one drives the runtime
+            // itself.
+            if task.local.load(Ordering::SeqCst) || task.block {
+                here.push(task);
+            } else {
+                batch.push(task);
+            }
+        }
+        if batch.is_empty() && here.is_empty() {
+            return Some(false);
+        }
+        if batch.len() == 1 {
+            here.insert(0, batch.remove(0));
+        } else if !batch.is_empty() {
+            super::workers::run_batch(self, batch);
+        }
+        for task in here {
+            self.process_on_this_thread(task);
+        }
+        Some(true)
     }
 
     /// Run `f` with the simulated threads it starts in this runtime's thread group, so
@@ -907,6 +968,7 @@ impl Spawner {
         };
 
         let task = Task::new(runtime, false, wrapped);
+        task.local.store(true, Ordering::SeqCst);
         self.inner_spawn(&task);
         // Wake the executor if it waits for work: the spawn may come from another thread.
         task.runtime.notify();
@@ -1014,7 +1076,7 @@ pub fn wait() -> Result<(), Error> {
 /// Tasks are the unit of execution in the simulator. Each task wraps a future and
 /// tracks its execution state. Tasks can be either blocking or non-blocking, which
 /// determines how the runtime schedules their execution.
-struct Task {
+pub(crate) struct Task {
     /// Unique identifier for this task
     id: u64,
     /// Runtime this task belongs to
@@ -1028,6 +1090,8 @@ struct Task {
     /// Whether its future is being polled (perhaps further up the stack, if it nests
     /// `Handle::block_on`).
     polling: AtomicBool,
+    /// Whether its future must be polled on the thread that spawned it (`spawn_local`).
+    pub(crate) local: AtomicBool,
 }
 
 impl std::fmt::Debug for Task {
@@ -1055,6 +1119,7 @@ impl Task {
             finished: AtomicBool::new(false),
             block,
             polling: AtomicBool::new(false),
+            local: AtomicBool::new(false),
         });
         registry
             .lock()
@@ -1087,7 +1152,15 @@ impl Task {
         }
         let waker = self.waker();
         let mut ctx = Context::from_waker(&waker);
-        let mut future = self.future.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut future = match self.future.try_lock() {
+            Ok(future) => future,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            // Polled on another worker right now (woken meanwhile): poll it again later.
+            Err(std::sync::TryLockError::WouldBlock) => {
+                self.runtime.spawner.inner_spawn(self);
+                return Poll::Pending;
+            }
+        };
         self.polling.store(true, Ordering::SeqCst);
         let poll = future.as_mut().poll(&mut ctx);
         self.polling.store(false, Ordering::SeqCst);
@@ -1198,8 +1271,27 @@ fn start_blocking_thread<F, R>(
 ///
 /// * This function always succeeds for the simulator runtime
 #[allow(clippy::unnecessary_wraps)]
-pub(crate) fn build_runtime(_builder: &Builder) -> Result<Runtime, Error> {
-    Ok(Runtime::new())
+pub(crate) fn build_runtime(builder: &Builder) -> Result<Runtime, Error> {
+    let runtime = Runtime::new();
+    // A current-thread runtime never runs two tasks at once; a multi-thread one runs its
+    // `worker_threads`, else the run's number of workers.
+    #[cfg(feature = "thread-simulator")]
+    {
+        let workers = match builder.flavor {
+            crate::RuntimeFlavor::CurrentThread => 1,
+            crate::RuntimeFlavor::MultiThread => {
+                #[cfg(feature = "rt-multi-thread")]
+                let fixed = builder.worker_threads.unwrap_or(0);
+                #[cfg(not(feature = "rt-multi-thread"))]
+                let fixed = 0;
+                fixed
+            }
+        };
+        runtime.worker_count.store(workers, Ordering::SeqCst);
+    }
+    #[cfg(not(feature = "thread-simulator"))]
+    let _ = builder;
+    Ok(runtime)
 }
 
 #[cfg(test)]
