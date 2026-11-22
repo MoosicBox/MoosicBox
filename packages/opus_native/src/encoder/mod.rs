@@ -92,6 +92,8 @@ pub struct Encoder {
     #[cfg(feature = "hybrid")]
     hybrid_energy_db: i32,
     #[cfg(feature = "hybrid")]
+    hybrid_tilt_db: i32,
+    #[cfg(feature = "hybrid")]
     practical_prefix_bitrate: Option<u32>,
     #[cfg(feature = "hybrid")]
     native_prefix_score: Option<Box<hybrid::NativePrefixScore>>,
@@ -179,6 +181,8 @@ impl Encoder {
             practical: None,
             #[cfg(feature = "hybrid")]
             hybrid_energy_db: 0,
+            #[cfg(feature = "hybrid")]
+            hybrid_tilt_db: 0,
             #[cfg(feature = "hybrid")]
             practical_prefix_bitrate: None,
             #[cfg(feature = "hybrid")]
@@ -789,11 +793,22 @@ impl Encoder {
                 && internal_size == 480
                 && self.config.channels == Channels::Stereo
                 && target.iter().all(|&x| x.unsigned_abs() <= 2);
-            for &db in if quiet {
+            let slopes = if quiet && eligible && control.bitrate <= 64_000 {
+                &[0, -3, 3][..]
+            } else {
+                &[0][..]
+            };
+            let biases = if quiet {
                 &[0, -1, 1, -2, 2][..]
             } else {
                 &[0, -1, -2, -3, -6][..]
-            } {
+            };
+            // Compare spectrally tilted energy targets near the PCM quantization floor.
+            // Keep the flat target first and score each finalized packet at equal rate.
+            for (slope, db) in slopes
+                .iter()
+                .flat_map(|&s| biases.iter().map(move |&d| (s, d)))
+            {
                 if db != 0 && !eligible {
                     continue;
                 }
@@ -805,6 +820,7 @@ impl Encoder {
                     phases[1] += phase.elapsed().as_nanos();
                 }
                 trial.hybrid_energy_db = db;
+                trial.hybrid_tilt_db = slope;
                 trial.practical_prefix_bitrate = Some(budget);
                 #[cfg(test)]
                 let phase = std::time::Instant::now();
@@ -830,7 +846,8 @@ impl Encoder {
                         let mut suffix = prepared.clone();
                         for channel in 0..suffix.channels {
                             for band in suffix.start..suffix.end {
-                                suffix.target_energy[channel * 21 + band] += db * 10_885;
+                                suffix.target_energy[channel * 21 + band] +=
+                                    (db + slope * (band as i32 - 18)) * 10_885;
                             }
                         }
                         Self::encode_celt_suffix(suffix, None)
@@ -855,6 +872,7 @@ impl Encoder {
                 if prepared_frame.is_some() && RD_VERIFY_CANDIDATES.get() {
                     let mut reference = self.clone();
                     reference.hybrid_energy_db = db;
+                    reference.hybrid_tilt_db = slope;
                     reference.practical_prefix_bitrate = Some(budget);
                     let expected = reference.encode_practical_boundary(
                         pcm,
@@ -985,6 +1003,7 @@ impl Encoder {
             shadow.pending_prefix = None;
         }
         winner.hybrid_energy_db = 0;
+        winner.hybrid_tilt_db = 0;
         winner.practical_prefix_bitrate = None;
         winner.native_prefix_score = None;
         let state = winner
@@ -1414,10 +1433,11 @@ impl Encoder {
         let (mut target_energy, energy) = quantize::energies(&spectrum, lm);
         #[cfg(feature = "hybrid")]
         if hybrid && self.config.bitrate <= 64_000 {
-            let offset = self.hybrid_energy_db * 10_885;
+            let bias = self.hybrid_energy_db;
             for channel in 0..channels {
                 for band in start..end {
-                    target_energy[channel * 21 + band] += offset;
+                    target_energy[channel * 21 + band] +=
+                        (bias + self.hybrid_tilt_db * (band as i32 - 18)) * 10_885;
                 }
             }
         }
