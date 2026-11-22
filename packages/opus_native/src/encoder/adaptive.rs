@@ -1469,6 +1469,115 @@ mod tests {
         );
     }
 
+    // Slow reference for this voiced 48 kHz / 480-sample stereo schedule only.
+    // Rebuild every packet and decode it from the incoming state; never consume
+    // the production winner, prepared CELT suffix, or cached SILK prefix score.
+    #[cfg(feature = "hybrid")]
+    fn voiced_reference_packet(
+        encoder: &mut Encoder,
+        decoder: &mut crate::Decoder,
+        pcm: &[f32],
+        control: EncoderControl,
+        target: &[i16],
+    ) -> crate::Result<Vec<u8>> {
+        use super::super::hybrid::{NativePrefixScore, packet_lowband_bitrate};
+        encoder.set_control(control)?;
+        let hybrid = control.mode != EncoderMode::Celt;
+        let departing = !hybrid && encoder.active_mode() == EncoderMode::Hybrid;
+        let grid;
+        let input = if hybrid {
+            pcm
+        } else {
+            grid = pcm
+                .iter()
+                .map(|&x| f32::from((x * 32768.).round().clamp(-32768., 32767.) as i16) / 32768.)
+                .collect::<Vec<_>>();
+            &grid
+        };
+        let nominal = packet_lowband_bitrate(control.bitrate, Channels::Stereo, 480);
+        let budgets = [
+            nominal,
+            nominal * 3 / 4,
+            nominal / 2,
+            nominal * 9 / 8,
+            nominal * 5 / 4,
+        ];
+        let count = if !hybrid {
+            1
+        } else if control.bitrate == 32_000 {
+            5
+        } else {
+            3
+        };
+        let biases: &[i32] = if hybrid { &[0, -1, -2, -3, -6] } else { &[0] };
+        // The near-silent search is a different policy, not part of this fixture.
+        assert!(!hybrid || target.iter().any(|v| v.unsigned_abs() >= 128));
+        let mut origin = decoder.clone();
+        if encoder.active_mode() == EncoderMode::Celt {
+            origin.silk.reset_decoder_state();
+            origin.silk_resamplers.clear();
+            origin.silk_resampler_input_rate = 0;
+        }
+        let mut best: Option<ClosedLoopCandidate> = None;
+        for &budget in &budgets[..count] {
+            for &db in biases {
+                let mut trial = encoder.clone();
+                trial.practical_prefix_bitrate = Some(budget);
+                trial.hybrid_energy_db = db;
+                if hybrid {
+                    trial.native_prefix_score = Some(NativePrefixScore::uncached(&origin, target));
+                }
+                let packet = if hybrid || departing {
+                    trial.encode_unredundant_candidate(
+                        input,
+                        EncoderControl {
+                            mode: if hybrid {
+                                EncoderMode::Hybrid
+                            } else {
+                                EncoderMode::Celt
+                            },
+                            ..control
+                        },
+                    )
+                } else {
+                    trial.encode_frame_inner(input)
+                };
+                let Ok(packet) = packet else { continue };
+                if packet.len() > control.bitrate as usize * 480 / 384_000 {
+                    continue;
+                }
+                let mut synthesis = decoder.clone();
+                let mut output = vec![0; target.len()];
+                if synthesis.decode(Some(&packet), &mut output, false).ok() != Some(480) {
+                    continue;
+                }
+                let error = output
+                    .iter()
+                    .zip(target)
+                    .map(|(&a, &b)| (i128::from(a) - i128::from(b)).pow(2))
+                    .sum();
+                if best.as_ref().is_none_or(|old| error < old.error) {
+                    best = Some(ClosedLoopCandidate {
+                        error,
+                        encoder: trial,
+                        synthesis,
+                        packet,
+                        db,
+                    });
+                }
+            }
+        }
+        let mut winner = best.ok_or_else(|| super::unavailable("no rebuilt voiced candidate"))?;
+        winner.encoder.practical_prefix_bitrate = None;
+        winner.encoder.native_prefix_score = None;
+        winner.encoder.hybrid_energy_db = 0;
+        winner.encoder.started = true;
+        winner.encoder.adaptive.as_mut().unwrap().control = control;
+        *encoder = winner.encoder;
+        *decoder = winner.synthesis;
+        Ok(winner.packet)
+    }
+
     #[test]
     #[cfg(feature = "hybrid")]
     #[ignore = "diagnostic production/proof state equivalence; does not replace full public quality qualification"]
@@ -1499,7 +1608,7 @@ mod tests {
                 EncoderMode::Celt
             };
             let control = EncoderControl {
-                mode,
+                mode: if frame >= 16 { EncoderMode::Auto } else { mode },
                 bitrate: if (4..12).contains(&frame) {
                     32_000
                 } else {
@@ -1507,15 +1616,11 @@ mod tests {
                 },
                 bandwidth: Bandwidth::Fullband,
             };
-            public
-                .set_control(EncoderControl {
-                    mode: if frame >= 16 { EncoderMode::Auto } else { mode },
-                    ..control
-                })
-                .unwrap();
+            public.set_control(control).unwrap();
             let actual = public.encode(&pcm).unwrap();
             let expected =
-                closed_loop_packet(&mut proof, &mut synthesis, &pcm, control, &target).unwrap();
+                voiced_reference_packet(&mut proof, &mut synthesis, &pcm, control, &target)
+                    .unwrap();
             assert_eq!(
                 actual, expected,
                 "production/proof packet divergence at frame {frame}"
