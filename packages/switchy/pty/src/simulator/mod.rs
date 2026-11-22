@@ -318,6 +318,9 @@ struct Terminal {
     awaiting_report: bool,
     /// Windows: what the master wrote so far of a cursor report.
     report: Vec<u8>,
+    /// Windows: echoes of what was typed while the cursor query is unanswered, held with the
+    /// rest of the console's output.
+    held_echo: Vec<u8>,
     windows: bool,
     nonblocking: bool,
     took_writer: bool,
@@ -363,7 +366,7 @@ impl Terminal {
         for _ in 0..count.min(self.line.len()) {
             self.line.pop();
             if self.echo {
-                self.output.extend(ECHO_ERASE);
+                self.echo_out(ECHO_ERASE);
             }
         }
     }
@@ -380,10 +383,27 @@ impl Terminal {
             return;
         }
         if byte == b'\n' {
-            self.output.extend(b"\r\n");
+            self.echo_out(b"\r\n");
         } else {
-            self.output.push_back(byte);
+            self.echo_out(&[byte]);
         }
+    }
+
+    /// Echo `bytes`: to the output, or (a console still waiting for its cursor report) held
+    /// until the report comes, as the console renders nothing before.
+    fn echo_out(&mut self, bytes: &[u8]) {
+        if self.awaiting_report {
+            self.held_echo.extend_from_slice(bytes);
+        } else {
+            self.output.extend(bytes);
+        }
+    }
+
+    /// The console's cursor query was answered (or the console closed): what it held flows.
+    fn release_held(&mut self) {
+        self.awaiting_report = false;
+        let held = std::mem::take(&mut self.held_echo);
+        self.output.extend(held);
     }
 
     /// Take one typed byte through canonical editing.
@@ -1312,7 +1332,7 @@ impl Kernel {
             return false;
         }
         t.hung_up = true;
-        t.awaiting_report = false;
+        t.release_held();
         let targets: Vec<u32> = state
             .processes
             .iter()
@@ -1347,7 +1367,7 @@ impl Kernel {
         match report_shape(&t.report) {
             Some(true) => {
                 t.report.clear();
-                t.awaiting_report = false;
+                t.release_held();
                 Vec::new()
             }
             Some(false) => Vec::new(),
@@ -1386,7 +1406,7 @@ impl Kernel {
                 t.input.clear();
                 t.line.clear();
                 if t.echo {
-                    t.output.extend(if byte == 0x03 { b"^C" } else { b"^\\" });
+                    t.echo_out(if byte == 0x03 { b"^C" } else { b"^\\" });
                 }
                 Self::signal_foreground(state, terminal, signal);
                 consumed += 1;
@@ -1456,6 +1476,7 @@ impl Kernel {
                 readers: 0,
                 awaiting_report: held,
                 report: Vec::new(),
+                held_echo: Vec::new(),
                 windows,
                 nonblocking: false,
                 took_writer: false,

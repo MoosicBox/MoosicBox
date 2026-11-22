@@ -834,3 +834,27 @@ fn a_pseudo_console_may_ask_for_the_cursor_late_or_never() {
     }
     assert!(never > 0 && late > 0, "never {never}, late {late}");
 }
+
+#[test]
+fn a_console_holds_the_echo_of_typing_until_its_cursor_query_is_answered() {
+    for seed in 0..10 {
+        let (before, after) = run(seed, Personality::Windows, || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let _child = slave.spawn(&SpawnCommand::new("cat")).unwrap();
+            let mut writer = master.take_writer().unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            writer.write_all(b"hi").unwrap();
+            let mut buffer = [0_u8; 64];
+            let read = reader.read(&mut buffer).unwrap();
+            let before = buffer[..read].to_vec();
+            writer.write_all(b"\x1b[1;1R").unwrap();
+            let read = reader.read(&mut buffer).unwrap();
+            (before, buffer[..read].to_vec())
+        });
+        assert_eq!(
+            before, b"\x1b[6n",
+            "seed {seed}: only the query comes first"
+        );
+        assert!(after.starts_with(b"hi"), "seed {seed}: {after:?}");
+    }
+}
