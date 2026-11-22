@@ -17,12 +17,9 @@ impl Write for Sink {
     }
 }
 #[test]
-fn hybrid_24k_and_mono_keep_128k_minimum_before_headers() {
+fn hybrid_bitrate_limits_apply_to_all_supported_layouts_before_headers() {
     for sample_rate in [24_000, 48_000] {
         for channels in [1, 2] {
-            if sample_rate == 48_000 && channels == 2 {
-                continue; // Only this independently qualified case admits 32 kb/s.
-            }
             for divisor in [100, 50] {
                 let base = OpusEncodeConfig {
                     backend: OpusEncodeBackend::Native,
@@ -32,7 +29,7 @@ fn hybrid_24k_and_mono_keep_128k_minimum_before_headers() {
                     frame_size: sample_rate as usize / divisor,
                     ..Default::default()
                 };
-                for bitrate in [32_000, 64_000, 127_999, 256_001] {
+                for bitrate in [31_999, 256_001] {
                     let mut sink = Sink::default();
                     assert!(
                         OpusStreamEncoder::new(&mut sink, OpusEncodeConfig { bitrate, ..base })
@@ -41,7 +38,7 @@ fn hybrid_24k_and_mono_keep_128k_minimum_before_headers() {
                     );
                     assert_eq!(sink.0, 0, "invalid configuration wrote headers");
                 }
-                for bitrate in [128_000, 256_000] {
+                for bitrate in [32_000, 64_000, 128_000, 256_000] {
                     assert!(
                         OpusStreamEncoder::new(
                             Sink::default(),
@@ -67,9 +64,9 @@ fn native_mode_bitrate_boundaries_validate_before_headers() {
         (OpusEncodeMode::Celt, 2, 240, 64000, 256000),
         (OpusEncodeMode::Celt, 1, 480, 32000, 256000),
         (OpusEncodeMode::Celt, 2, 960, 32000, 256000),
-        (OpusEncodeMode::Silk, 1, 160, 48000, 128000),
-        (OpusEncodeMode::Silk, 2, 320, 96000, 128000),
-        (OpusEncodeMode::Hybrid, 1, 480, 128000, 256000),
+        (OpusEncodeMode::Silk, 1, 160, 16000, 128000),
+        (OpusEncodeMode::Silk, 2, 320, 16000, 128000),
+        (OpusEncodeMode::Hybrid, 1, 480, 32000, 256000),
         (OpusEncodeMode::Hybrid, 2, 480, 32000, 256000),
         (OpusEncodeMode::Hybrid, 2, 960, 32000, 256000),
     ] {
