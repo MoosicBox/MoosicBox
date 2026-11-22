@@ -1077,11 +1077,14 @@ impl SilkEncoder {
         }
         let mut cache = QuantizerCache::default();
         let mut best = None;
-        for mask in if self.config.channels == crate::Channels::Mono {
-            [0, 1, 4, 5]
+        let masks: &[u8] = if self.config.channels == crate::Channels::Mono {
+            &[0, 1, 4, 5]
+        } else if self.config.frame_size == 320 {
+            &[0, 3]
         } else {
-            [0, 1, 2, 3]
-        } {
+            &[0, 1, 2, 3]
+        };
+        for &mask in masks {
             let mut candidate = self.clone();
             let mut range = shared.clone();
             let mut scoring = PrefixScoring {

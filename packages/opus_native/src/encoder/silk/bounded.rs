@@ -550,6 +550,52 @@ impl Search<'_> {
         Ok(())
     }
 
+    // Drive a common log-gain correction with actual range-coded bit usage.
+    // Preserve the channel energy ratio rather than searching a gain-pair grid.
+    fn rate_control(&mut self) -> Result<()> {
+        let centers: [i32; 2] = std::array::from_fn(|c| {
+            let x = &self.inputs[c];
+            let energy = x.iter().map(|&v| i64::from(v).pow(2)).sum::<i64>() / x.len() as i64;
+            (0..64)
+                .min_by_key(|&i| {
+                    let g = i64::from(SilkDecoder::dequantize_gain(i));
+                    (((g * g) >> 32) - energy).abs()
+                })
+                .unwrap()
+        });
+        for pressure in [3, 5] {
+            let (mut lo, mut hi) = (-centers[0].max(centers[1]), 63 - centers[0].min(centers[1]));
+            while lo <= hi {
+                let offset = lo + (hi - lo) / 2;
+                let choice = centers.map(|g| ((g + offset).clamp(0, 63), pressure, true));
+                let before = self.callbacks;
+                self.evaluate(choice)?;
+                if self.callbacks > before {
+                    hi = offset - 1;
+                } else {
+                    lo = offset + 1;
+                }
+            }
+        }
+        let mute = [(0, 13, false); 2];
+        self.evaluate(mute)?;
+        // A mute winner can indicate that the gain-only loop skipped sparse,
+        // affordable excitation. Compare high pulse penalties at independently
+        // scaled gains before committing to a near-silent reconstruction.
+        if self.winner == Some(mute) && centers != [0, 0] {
+            for pressure in [10, 11, 12] {
+                for offset in [-32, -24, -16, -8, 0] {
+                    for unshaped in [false, true] {
+                        self.evaluate(std::array::from_fn(|c| {
+                            ((centers[c] + offset).clamp(0, 63), pressure, unshaped)
+                        }))?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn seeds(&mut self) -> Result<()> {
         let rms: Vec<_> = self
             .inputs
@@ -778,8 +824,17 @@ impl SilkEncoder {
                 })
                 .map(Some);
         }
-        search.seeds()?;
-        search.refine()?;
+        if self.config.frame_size == 320 {
+            search.rate_control()?;
+            if search.best.is_none() {
+                return Err(crate::Error::Unsupported(
+                    "no legal rate-controlled stereo prefix".into(),
+                ));
+            }
+        } else {
+            search.seeds()?;
+            search.refine()?;
+        }
         #[cfg(test)]
         eprintln!(
             "SILK_BOUNDED trials={} quantizations={} callbacks={} fallback={} elapsed_us={}",
