@@ -1305,12 +1305,30 @@ impl Encoder {
             self.interpolator = resample::Interpolator::new(channels, 1);
         }
         self.adaptive.as_mut().unwrap().active = target;
+        // At minimum rate the unscored short prefix needs excitation bits;
+        // reserve two suffix bytes. At 64k mode entry reserve half for CELT.
+        // An explicit allocation is final, not an input to this default policy.
+        let default_rate = match (
+            self.config.sample_rate,
+            self.config.channels,
+            internal_size,
+            target,
+            control.bitrate,
+        ) {
+            (SampleRate::Hz48000, Channels::Stereo, 480, EncoderMode::Hybrid, 32_000) => 30_400,
+            (SampleRate::Hz48000, Channels::Stereo, 480, EncoderMode::Hybrid, 64_000)
+                if previous != target =>
+            {
+                32_000
+            }
+            _ => {
+                hybrid::packet_lowband_bitrate(control.bitrate, self.config.channels, internal_size)
+            }
+        };
         self.silk
             .as_mut()
             .unwrap()
-            .set_bitrate(self.practical_prefix_bitrate.unwrap_or_else(|| {
-                hybrid::packet_lowband_bitrate(control.bitrate, self.config.channels, internal_size)
-            }))?;
+            .set_bitrate(self.practical_prefix_bitrate.unwrap_or(default_rate))?;
         let packet = self.encode_coding_frame_prepared(&delayed, None, capture)?;
         let channels = channel_count(self.config.channels);
         self.adaptive.as_mut().unwrap().tail = delayed[delayed.len() - 120 * channels..].to_vec();

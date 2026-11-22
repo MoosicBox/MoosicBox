@@ -1795,7 +1795,20 @@ mod tests {
                 (3, 480, 4..=6) | (1, 960, 16..=18)
             );
             let incoming_silk = trace_prefix.then(|| encoder.silk.as_ref().unwrap().clone());
-            let previous_budget = super::super::hybrid::PREFIX_FRONTIER_BYTES.replace(prefix_bytes);
+            // The frontier experiment varies only the 32k prefix. Pin the
+            // other frames to its original control allocation on the same
+            // per-encoder override path as production RD candidates.
+            encoder.practical_prefix_bitrate = prefix_bytes.map(|bytes| {
+                if bitrate == 32_000 {
+                    ((bytes + 1) * 384_000 / frame_size) as u32
+                } else {
+                    super::super::hybrid::packet_lowband_bitrate(
+                        bitrate,
+                        Channels::Stereo,
+                        frame_size,
+                    )
+                }
+            });
             let control = EncoderControl {
                 bitrate,
                 bandwidth: Bandwidth::Fullband,
@@ -1833,7 +1846,7 @@ mod tests {
             } else {
                 encoder.encode_unredundant_candidate(&pcm, control)
             };
-            super::super::hybrid::PREFIX_FRONTIER_BYTES.set(previous_budget);
+            encoder.practical_prefix_bitrate = None;
             let packet = packet.unwrap();
             if let Some(incoming_silk) = incoming_silk {
                 dump_cold_entry(&encoder, shape, frame, bitrate, &packet, incoming_silk);
@@ -1921,11 +1934,7 @@ mod tests {
         // three-frame traces distinguish a good cold frame from a bad successor;
         // replaying every PCM file with a fresh SILK encoder would hide that bug.
         std::fs::write(format!("{path}.packet"), packet).unwrap();
-        let prefix_bitrate = super::super::hybrid::packet_lowband_bitrate(
-            bitrate,
-            encoder.config.channels,
-            frame_size,
-        );
+        let prefix_bitrate = encoder.silk.as_ref().unwrap().bitrate();
         let prefix_bytes = (prefix_bitrate as usize * frame_size / 384_000).saturating_sub(1);
         let payload_bytes = (bitrate as usize * frame_size / 384_000).saturating_sub(1);
         // Prefix is the first entropy operation in encode_coding_frame. This

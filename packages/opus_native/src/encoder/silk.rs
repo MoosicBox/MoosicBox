@@ -564,6 +564,11 @@ impl SilkEncoder {
         }
     }
 
+    #[cfg(test)]
+    pub(super) const fn bitrate(&self) -> u32 {
+        self.config.bitrate
+    }
+
     /// Change the excitation budget without discarding LPC/pitch history.
     pub(super) fn set_bitrate(&mut self, bitrate: u32) -> Result<()> {
         if !(8_000..=128_000).contains(&bitrate) {

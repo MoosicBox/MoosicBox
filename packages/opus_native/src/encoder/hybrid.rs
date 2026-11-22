@@ -113,12 +113,6 @@ pub(super) fn candidate_short_prefix_bitrate(bitrate: u32, frame_size: usize) ->
     (((silk_bytes + 1) * 384_000 / frame_size) as u32).clamp(8_000, 128_000)
 }
 
-#[cfg(test)]
-std::thread_local! {
-    /// Scoped to the explicitly ignored frontier experiment's encoding thread.
-    pub(super) static PREFIX_FRONTIER_BYTES: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
-}
-
 /// Frame-budget allocation for practical stereo hybrid packets. The low-rate
 /// endpoint preserves the qualified seven-eighths prefix with eight-byte suffix
 /// reserve; the extra prefix share tapers to the established split at 64 kbit/s.
@@ -129,14 +123,6 @@ pub(super) fn packet_lowband_bitrate(
     channels: Channels,
     frame_size_48k: usize,
 ) -> u32 {
-    #[cfg(test)]
-    if bitrate == 32_000
-        && channels == Channels::Stereo
-        && frame_size_48k == 480
-        && let Some(bytes) = PREFIX_FRONTIER_BYTES.get()
-    {
-        return ((bytes + 1) * 384_000 / frame_size_48k) as u32;
-    }
     let established = lowband_bitrate(bitrate, channels);
     if channels == Channels::Mono || bitrate >= 64_000 {
         return established;
