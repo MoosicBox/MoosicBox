@@ -210,6 +210,11 @@ impl<T> Receiver<T> {
     ///
     /// * If the internal `Mutex` is poisoned
     pub fn poll_recv(&self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<T>> {
+        if crate::simulator::faults::spurious_pending_now(cx, || {
+            !self.inner.lock().unwrap().is_empty() || self.is_disconnected()
+        }) {
+            return std::task::Poll::Pending;
+        }
         // Clone before locking: even custom RawWaker callbacks may re-enter us.
         let waker = cx.waker().clone();
         let mut inner = self.inner.lock().unwrap();
@@ -429,6 +434,11 @@ impl<T> Sender<T> {
         };
         let mut value = Some(value);
         std::future::poll_fn(|cx| {
+            if crate::simulator::faults::spurious_pending_now(cx, || {
+                self.is_disconnected() || !self.inner.lock().unwrap().is_full()
+            }) {
+                return std::task::Poll::Pending;
+            }
             let waker = cx.waker().clone();
             let mut inner = self.inner.lock().unwrap();
             if self.is_disconnected() {

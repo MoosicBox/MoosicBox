@@ -111,6 +111,12 @@ impl Barrier {
     ///
     /// * If the internal mutex is poisoned
     pub async fn wait(&self) -> BarrierWaitResult {
+        // The last task to arrive is ready at once.
+        super::super::faults::spurious_point(|| {
+            let inner = self.inner.lock().unwrap();
+            inner.count + 1 == inner.n
+        })
+        .await;
         let receiver = {
             let mut inner = self.inner.lock().unwrap();
 

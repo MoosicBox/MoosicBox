@@ -44,10 +44,19 @@ impl<T> Clone for Sender<T> {
 }
 
 impl<T> Sender<T> {
+    /// A spurious `Pending` before a send or reservation that would complete at once (see the
+    /// simulator's `faults`).
+    #[cfg(feature = "simulator")]
+    fn spurious_point(&self) -> impl std::future::Future<Output = ()> + '_ {
+        crate::simulator::faults::spurious_point(|| self.0.capacity() > 0 || self.0.is_closed())
+    }
+
     /// Sends a value, waiting for capacity.
     /// # Errors
     /// * Returns the value if the receiver is closed.
     pub async fn send(&self, value: T) -> Result<(), error::SendError<T>> {
+        #[cfg(feature = "simulator")]
+        self.spurious_point().await;
         self.0.send(value).await
     }
     /// Sends a value before the selected backend's timeout expires.
@@ -85,12 +94,16 @@ impl<T> Sender<T> {
     /// # Errors
     /// * If the receiver is closed.
     pub async fn reserve(&self) -> Result<Permit<'_, T>, error::SendError<()>> {
+        #[cfg(feature = "simulator")]
+        self.spurious_point().await;
         self.0.reserve().await.map(Permit)
     }
     /// Reserves capacity while owning this sender.
     /// # Errors
     /// * If the receiver is closed.
     pub async fn reserve_owned(self) -> Result<OwnedPermit<T>, error::SendError<()>> {
+        #[cfg(feature = "simulator")]
+        self.spurious_point().await;
         self.0.reserve_owned().await.map(OwnedPermit)
     }
     /// Returns remaining capacity, excluding reserved slots.
@@ -105,6 +118,8 @@ impl<T> Sender<T> {
     }
     /// Waits until the receiver closes.
     pub async fn closed(&self) {
+        #[cfg(feature = "simulator")]
+        crate::simulator::faults::spurious_point(|| self.0.is_closed()).await;
         self.0.closed().await;
     }
 }
@@ -112,10 +127,24 @@ impl<T> Sender<T> {
 impl<T> Receiver<T> {
     /// Receives the next value, or None after closure and draining reservations.
     pub async fn recv(&mut self) -> Option<T> {
+        #[cfg(feature = "simulator")]
+        {
+            let receiver = &mut self.0;
+            crate::simulator::faults::spurious_point(move || {
+                !receiver.is_empty() || receiver.is_closed()
+            })
+            .await;
+        }
         self.0.recv().await
     }
     /// Polls for the next value without consuming it on Pending.
     pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
+        #[cfg(feature = "simulator")]
+        if crate::simulator::faults::spurious_pending_now(cx, || {
+            !self.0.is_empty() || self.0.is_closed()
+        }) {
+            return Poll::Pending;
+        }
         self.0.poll_recv(cx)
     }
     /// Attempts a receive without waiting.

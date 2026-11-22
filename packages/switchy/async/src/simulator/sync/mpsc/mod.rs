@@ -145,6 +145,11 @@ impl<T> Receiver<T> {
 
     /// Poll to receive a value (for async contexts).
     pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
+        if crate::simulator::faults::spurious_pending_now(cx, || {
+            !self.inner.is_empty() || self.inner.is_closed()
+        }) {
+            return Poll::Pending;
+        }
         self.inner.poll_recv(cx)
     }
 
@@ -154,6 +159,9 @@ impl<T> Receiver<T> {
     ///
     /// * Returns `RecvError::Disconnected` if all senders have been dropped
     pub async fn recv_async(&mut self) -> Result<T, RecvError> {
+        let inner = &mut self.inner;
+        crate::simulator::faults::spurious_point(move || !inner.is_empty() || inner.is_closed())
+            .await;
         self.inner.recv().await.ok_or(RecvError::Disconnected)
     }
 }

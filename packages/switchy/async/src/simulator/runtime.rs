@@ -106,6 +106,9 @@ type Queue = Arc<Mutex<Vec<Arc<Task>>>>;
 /// Every unfinished task of a runtime, by id, queued or not.
 type Registry = Arc<Mutex<BTreeMap<u64, Weak<Task>>>>;
 
+/// Tasks woken late (see `faults`), each with the steps it still waits, in the order woken.
+type Late = Arc<Mutex<Vec<(u64, Arc<Task>)>>>;
+
 static RUNTIME_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
 static TASK_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
 
@@ -308,6 +311,8 @@ pub struct Runtime {
     /// Set by [`Runtime::shutdown_now`]: the runtime never runs again.
     shut_down: Arc<AtomicBool>,
     registry: Registry,
+    /// Woken tasks waiting to be queued (late wakeups).
+    late: Late,
     /// The `switchy_thread` group of the simulated threads its tasks start.
     #[cfg(feature = "thread-simulator")]
     thread_group: u64,
@@ -344,9 +349,10 @@ impl GenericRuntime for Runtime {
             let mut future = Box::pin(future);
             let waker = self.blocking_waker();
             let mut ctx = Context::from_waker(&waker);
+            let owed = AtomicBool::new(false);
             loop {
                 #[allow(clippy::significant_drop_in_scrutinee)]
-                match future.as_mut().poll(&mut ctx) {
+                match super::faults::with_owed(&owed, || future.as_mut().poll(&mut ctx)) {
                     Poll::Ready(x) => {
                         return x;
                     }
@@ -390,6 +396,7 @@ impl Runtime {
             active: Arc::new(AtomicBool::new(false)),
             shut_down: Arc::new(AtomicBool::new(false)),
             registry: Arc::new(Mutex::new(BTreeMap::new())),
+            late: Arc::new(Mutex::new(Vec::new())),
             #[cfg(feature = "thread-simulator")]
             thread_group: switchy_thread::simulator::new_key(),
             #[cfg(feature = "thread-simulator")]
@@ -458,8 +465,11 @@ impl Runtime {
         let mut future = std::pin::pin!(future);
         let waker = self.blocking_waker();
         let mut ctx = Context::from_waker(&waker);
+        let owed = AtomicBool::new(false);
         loop {
-            if let Poll::Ready(output) = future.as_mut().poll(&mut ctx) {
+            if let Poll::Ready(output) =
+                super::faults::with_owed(&owed, || future.as_mut().poll(&mut ctx))
+            {
                 return output;
             }
             if !self.process_next_task() {
@@ -522,7 +532,15 @@ impl Runtime {
         }
     }
 
+    /// Run one step: queue the late wakeups due (see `faults`), then poll a ready task (or,
+    /// with several workers, a batch of them). Whether it did anything: polled a task, or has
+    /// late wakeups still waiting (they need more steps, so the caller must not idle).
     pub(crate) fn process_next_task(&self) -> bool {
+        let waiting = self.release_late_wakeups();
+        self.process_ready_task() || waiting
+    }
+
+    fn process_ready_task(&self) -> bool {
         #[cfg(feature = "thread-simulator")]
         if let Some(processed) = self.process_batch() {
             return processed;
@@ -532,6 +550,55 @@ impl Runtime {
         };
         self.process_on_this_thread(task);
         true
+    }
+
+    /// Queue a woken task: at once, or after a few steps if the wakeup is late (see
+    /// `faults`). A task already waiting late stays where it is, and one already queued is
+    /// not made late.
+    fn schedule_wake(&self, task: &Arc<Task>) {
+        let mut late = self.late.lock().unwrap_or_else(PoisonError::into_inner);
+        if late.iter().any(|(_, waiting)| waiting.id == task.id) {
+            return;
+        }
+        let steps = super::faults::late_wakeup(|| {
+            let queue = self.queue.lock().unwrap_or_else(PoisonError::into_inner);
+            queue.iter().all(|queued| queued.id != task.id)
+        });
+        if let Some(steps) = steps {
+            log::trace!("late wakeup: task {} waits {steps} steps", task.id);
+            late.push((steps, Arc::clone(task)));
+            return;
+        }
+        drop(late);
+        self.spawner.inner_spawn(task);
+    }
+
+    /// Count a step down for each late wakeup, and queue those whose wait is over. Whether
+    /// any still wait.
+    fn release_late_wakeups(&self) -> bool {
+        let (due, waiting) = {
+            let mut late = self.late.lock().unwrap_or_else(PoisonError::into_inner);
+            if late.is_empty() {
+                return false;
+            }
+            let mut due = Vec::new();
+            late.retain_mut(|(steps, task)| {
+                if *steps == 0 {
+                    due.push(Arc::clone(task));
+                    false
+                } else {
+                    *steps -= 1;
+                    true
+                }
+            });
+            (due, !late.is_empty())
+        };
+        for task in due {
+            if !task.finished() {
+                self.spawner.inner_spawn(&task);
+            }
+        }
+        waiting
     }
 
     /// Run one step of `task` on the calling thread, with this runtime current.
@@ -655,6 +722,8 @@ impl Runtime {
         let queued =
             std::mem::take(&mut *self.queue.lock().unwrap_or_else(PoisonError::into_inner));
         drop(queued);
+        let late = std::mem::take(&mut *self.late.lock().unwrap_or_else(PoisonError::into_inner));
+        drop(late);
     }
 
     /// Wait until no thread outside this runtime's group (one stepping it: a worker of another
@@ -918,6 +987,11 @@ impl<T: Send + Unpin> Future for JoinHandle<T> {
     type Output = Result<T, task::JoinError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        if super::faults::spurious_pending_now(cx, || {
+            self.result.is_some() || self.done.load(Ordering::SeqCst)
+        }) {
+            return Poll::Pending;
+        }
         if let Some(result) = self.as_mut().result.take() {
             return Poll::Ready(result);
         }
@@ -1166,6 +1240,8 @@ pub(crate) struct Task {
     killed: AtomicBool,
     /// The thread polling its future right now, if any (and its index, if a simulated thread).
     poller: std::sync::Mutex<Option<Poller>>,
+    /// Whether its last poll returned a spurious `Pending` (see `faults`).
+    spurious_owed: AtomicBool,
 }
 
 impl std::fmt::Debug for Task {
@@ -1196,6 +1272,7 @@ impl Task {
             poller: std::sync::Mutex::new(None),
             local: AtomicBool::new(false),
             killed: AtomicBool::new(false),
+            spurious_owed: AtomicBool::new(false),
         });
         registry
             .lock()
@@ -1282,7 +1359,7 @@ impl Task {
         let poll = {
             // Cleared even when the poll unwinds (a panic, or its thread killed).
             let _polling = Polling::start(self);
-            future.as_mut().poll(&mut ctx)
+            super::faults::with_owed(&self.spurious_owed, || future.as_mut().poll(&mut ctx))
         };
         // Killed while it ran (on another worker): drop it now.
         let poll = if self.killed() { Poll::Ready(()) } else { poll };
@@ -1382,11 +1459,7 @@ impl Wake for Task {
         if self.finished() || !self.runtime.active() {
             return;
         }
-        if self.block {
-            self.runtime.spawner.inner_spawn_blocking(&self);
-        } else {
-            self.runtime.spawner.inner_spawn(&self);
-        }
+        self.runtime.schedule_wake(&self);
         self.runtime.notify();
     }
 }

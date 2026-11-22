@@ -337,6 +337,12 @@ impl<T> Future for Changed<'_, T> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
+        if super::super::faults::spurious_pending_now(cx, || {
+            let state = this.shared.state();
+            state.version != *this.version || state.closed
+        }) {
+            return Poll::Pending;
+        }
         let mut state = this.shared.state();
         if state.version != *this.version {
             *this.version = state.version;
@@ -371,6 +377,9 @@ impl<T> Future for Closed<'_, T> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         let this = self.get_mut();
+        if super::super::faults::spurious_pending_now(cx, || this.shared.state().receivers == 0) {
+            return Poll::Pending;
+        }
         let mut state = this.shared.state();
         if state.receivers == 0 {
             state.closed_waiters.remove(this.waiter.take());

@@ -74,6 +74,9 @@ impl Future for Sleep {
                 this.duration.as_millis(),
             );
             if duration >= *this.duration {
+                if super::faults::spurious_pending_now(cx, || true) {
+                    return Poll::Pending;
+                }
                 *this.completed.as_mut() = true;
                 return Poll::Ready(());
             }
@@ -141,6 +144,9 @@ impl Future for Instant {
             let now = switchy_time::instant_now();
             log::trace!("Instant polled: now={:?} instant={:?}", now, this.instant);
             if now >= *this.instant {
+                if super::faults::spurious_pending_now(cx, || true) {
+                    return Poll::Pending;
+                }
                 *this.completed.as_mut() = true;
                 return Poll::Ready(now);
             }
@@ -242,6 +248,9 @@ impl Interval {
     pub fn poll_tick(&mut self, cx: &mut Context) -> Poll<std::time::Instant> {
         let now = switchy_time::instant_now();
         if now >= self.now {
+            if super::faults::spurious_pending_now(cx, || true) {
+                return Poll::Pending;
+            }
             let deadline = self.now;
             let late = now.duration_since(deadline);
             let (base, offset) = if late > Duration::from_millis(5) {
