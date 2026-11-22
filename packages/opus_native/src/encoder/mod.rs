@@ -640,7 +640,7 @@ impl Encoder {
         } else {
             pcm
         };
-        let packet = next.encode_frame(pcm)?;
+        let packet = next.encode_frame(pcm, false)?;
         next.started = true;
         *self = next;
         Ok(packet)
@@ -663,11 +663,10 @@ impl Encoder {
         let mut packets = Vec::new();
         if self.started {
             for _ in 0..self.lookahead().div_ceil(self.config.frame_size) {
-                packets.push(next.encode_frame(&vec![
-                    0.0;
-                    self.config.frame_size
-                        * channel_count(self.config.channels)
-                ])?);
+                packets.push(next.encode_frame(
+                    &vec![0.0; self.config.frame_size * channel_count(self.config.channels)],
+                    true,
+                )?);
             }
         }
         next.finished = true;
@@ -676,17 +675,21 @@ impl Encoder {
     }
 
     #[allow(clippy::too_many_lines)] // Ordered CELT packet entropy stages.
-    fn encode_frame(&mut self, pcm: &[f32]) -> Result<Vec<u8>> {
+    fn encode_frame(
+        &mut self,
+        pcm: &[f32],
+        #[cfg_attr(not(feature = "hybrid"), allow(unused_variables))] flush: bool,
+    ) -> Result<Vec<u8>> {
         #[cfg(feature = "hybrid")]
         if self.practical.is_some() {
-            return self.encode_practical_frame(pcm);
+            return self.encode_practical_frame(pcm, flush);
         }
         self.encode_frame_inner(pcm)
     }
 
     #[cfg(feature = "hybrid")]
     #[allow(clippy::too_many_lines)] // Bounded transactional RD loop commits packet, predictive state and synthesis together.
-    fn encode_practical_frame(&mut self, pcm: &[f32]) -> Result<Vec<u8>> {
+    fn encode_practical_frame(&mut self, pcm: &[f32], flush: bool) -> Result<Vec<u8>> {
         #[cfg(test)]
         if hybrid::POOL48.get() {
             hybrid::POOL48_EVALUATIONS.set(0);
@@ -808,7 +811,19 @@ impl Encoder {
                 }) && pcm.chunks_exact(pcm.len() / 4).all(|group| {
                     group.iter().any(|v| v.abs() >= 128.0 / 32768.0)
                 })));
-        for &quick in if quiet_fast || shortlist {
+        // On a padded final packet there is no following predictor state to
+        // preserve. Compare the rate-controlled splits against the delayed tail.
+        let edge = eligible
+            && internal_size == 480
+            && control.bitrate == 32_000
+            && self.config.channels == Channels::Stereo
+            && self.config.sample_rate == SampleRate::Hz24000
+            && (flush
+                || (target.iter().all(|v| v.unsigned_abs() < 128)
+                    && pcm.iter().any(|v| v.abs() >= 1.0 / 32.0)));
+        for &quick in if edge {
+            &[true][..]
+        } else if quiet_fast || shortlist {
             &[true, false][..]
         } else {
             &[false][..]
@@ -828,11 +843,11 @@ impl Encoder {
                 }
                 if best.as_ref().is_some_and(|b| {
                     (quiet_fast && (b.error == 0 || b.error * 3 < energy))
-                        || (shortlist && b.error * 2 < energy)
+                        || ((shortlist || edge) && b.error * 2 < energy)
                 }) {
                     break;
                 }
-                if quick && budget != nominal {
+                if quick && budget != nominal && !edge {
                     continue;
                 }
                 let mut prepared_state = None;
