@@ -1238,8 +1238,14 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             SimResult::Fail {
                 props,
                 run,
+                // A panic resumed (`resume_unwind`) reached no panic hook: its message, if any.
                 error: if panic.is_none() {
-                    Some(format!("{e:?}"))
+                    Some(
+                        e.downcast_ref::<String>()
+                            .cloned()
+                            .or_else(|| e.downcast_ref::<&str>().map(|s| (*s).to_owned()))
+                            .unwrap_or_else(|| format!("{e:?}")),
+                    )
                 } else {
                     None
                 },
