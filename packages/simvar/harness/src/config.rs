@@ -294,7 +294,13 @@ impl std::fmt::Display for SimResult {
             #[cfg(not(feature = "time"))]
             let failed_epoch_offset = None;
 
-            let cmd = get_run_command(
+            let run_env: Vec<(&str, &str)> = props
+                .extra
+                .iter()
+                .filter(|(name, _)| is_environment_name(name))
+                .map(|(name, value)| (name.as_str(), value.as_str()))
+                .collect();
+            let cmd = get_run_command_with(
                 &[
                     "SIMULATOR_SEED",
                     "SIMULATOR_RUNS",
@@ -303,6 +309,7 @@ impl std::fmt::Display for SimResult {
                 ],
                 config.seed,
                 failed_epoch_offset,
+                &run_env,
             );
             format!("\n\nTo run again with this seed: `{cmd}`")
         };
@@ -449,6 +456,30 @@ fn get_cargoified_args() -> Vec<String> {
 }
 
 pub fn get_run_command(skip_env: &[&str], seed: u64, epoch_offset: Option<u64>) -> String {
+    get_run_command_with(skip_env, seed, epoch_offset, &[])
+}
+
+/// Whether a [`crate::SimBootstrap::props`] name is an environment variable the run needs
+/// (upper-case letters, digits and underscores, starting with a letter): such properties go in
+/// the run's replay command, as a run chosen by more than its seed (a guided fleet's input, say)
+/// needs them to replay.
+#[must_use]
+pub fn is_environment_name(name: &str) -> bool {
+    name.starts_with(|c: char| c.is_ascii_uppercase())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// [`get_run_command`], with `run_env` (this run's own environment, taking precedence over the
+/// process's) in the command too.
+#[must_use]
+pub fn get_run_command_with(
+    skip_env: &[&str],
+    seed: u64,
+    epoch_offset: Option<u64>,
+    run_env: &[(&str, &str)],
+) -> String {
     let args = get_cargoified_args();
     let quoted_args = args
         .iter()
@@ -464,11 +495,15 @@ pub fn get_run_command(skip_env: &[&str], seed: u64, epoch_offset: Option<u64>) 
         if !name.starts_with("SIMULATOR_") && name != "RUST_LOG" {
             continue;
         }
-        if skip_env.iter().any(|x| *x == name) {
+        if skip_env.iter().any(|x| *x == name) || run_env.iter().any(|(x, _)| *x == name) {
             continue;
         }
 
         write!(env_vars, "{name}={} ", shell_words::quote(value.as_str())).unwrap();
+    }
+    for (name, value) in run_env {
+        use std::fmt::Write as _;
+        write!(env_vars, "{name}={} ", shell_words::quote(value)).unwrap();
     }
 
     let mut prefix = format!("SIMULATOR_SEED={seed} ");
@@ -893,5 +928,29 @@ mod tests {
         assert!(output.contains("To run again with this seed:"));
         assert!(output.contains("SIMULATOR_SEED=4242"));
         assert!(output.contains("SIMULATOR_EPOCH_OFFSET=1700000000000"));
+    }
+}
+
+#[cfg(test)]
+mod run_environment_tests {
+    use super::*;
+
+    #[test]
+    fn environment_names_are_upper_case_words() {
+        assert!(is_environment_name("PANE_RUNTIME_SIM_PROFILE"));
+        assert!(is_environment_name("A1"));
+        assert!(!is_environment_name("profile"));
+        assert!(!is_environment_name("_X"));
+        assert!(!is_environment_name("1X"));
+    }
+
+    #[test]
+    fn a_run_environment_goes_in_the_command() {
+        let command = get_run_command_with(&[], 7, Some(9), &[("MY_PROFILE", "a=1,b=2 c")]);
+        assert!(
+            command.starts_with("SIMULATOR_SEED=7 SIMULATOR_EPOCH_OFFSET=9 "),
+            "{command}"
+        );
+        assert!(command.contains("MY_PROFILE='a=1,b=2 c'"), "{command}");
     }
 }

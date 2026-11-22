@@ -905,7 +905,13 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
                 let epoch_offset = Some(props.config.epoch_offset);
                 #[cfg(not(feature = "time"))]
                 let epoch_offset = None;
-                let command = config::get_run_command(
+                let run_env: Vec<(&str, &str)> = props
+                    .extra
+                    .iter()
+                    .filter(|(name, _)| config::is_environment_name(name))
+                    .map(|(name, value)| (name.as_str(), value.as_str()))
+                    .collect();
+                let command = config::get_run_command_with(
                     &[
                         "SIMULATOR_SEED",
                         "SIMULATOR_RUNS",
@@ -916,6 +922,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
                     ],
                     seed,
                     epoch_offset,
+                    &run_env,
                 );
                 let note = format!(
                     "shrunk the thread schedule from {original} choices to {}; replay with: \
@@ -1389,7 +1396,10 @@ fn run_trace() -> u64 {
 /// Implement this trait to customize simulation behavior at various lifecycle
 /// points. All methods have default implementations that do nothing.
 pub trait SimBootstrap: Send + Sync + 'static {
-    /// Returns custom properties to include in simulation output.
+    /// Returns custom properties to include in simulation output, asked once per run (with the
+    /// run's seed current). A property named like an environment variable (`UPPER_CASE`; see
+    /// [`config::is_environment_name`]) is one the run needs to replay, and goes in its replay
+    /// command: a run chosen by more than its seed (by a guided fleet, say) reports its input so.
     #[must_use]
     fn props(&self) -> Vec<(String, String)> {
         vec![]
