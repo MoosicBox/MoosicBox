@@ -979,8 +979,15 @@ fn stereo_silk_low_bitrate_product_regression() {
         let decoded = play(bytes, None);
         assert_eq!(decoded.len(), 2, "{config:?}");
         for channel in decoded {
-            assert_eq!(channel.len(), frames * (48000 / rate) as usize, "{config:?}");
-            assert!(channel.iter().all(|sample| sample.is_finite()), "{config:?}");
+            assert_eq!(
+                channel.len(),
+                frames * (48000 / rate) as usize,
+                "{config:?}"
+            );
+            assert!(
+                channel.iter().all(|sample| sample.is_finite()),
+                "{config:?}"
+            );
         }
     }
 }

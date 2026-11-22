@@ -53,7 +53,9 @@ fn practical_hybrid_controls_preserve_mode_after_entry() {
             assert_eq!(encoder.active_mode(), EncoderMode::Hybrid);
         }
     }
-    encoder.set_control(control(32000, EncoderMode::Celt)).unwrap();
+    encoder
+        .set_control(control(32000, EncoderMode::Celt))
+        .unwrap();
     encoder.encode(&input(2, 2)).unwrap();
     assert_eq!(encoder.active_mode(), EncoderMode::Celt);
 }
