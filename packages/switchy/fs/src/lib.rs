@@ -89,10 +89,8 @@ pub use types::{DirEntryInfo, FileId, FileKind, Metadata, Permissions};
 #[cfg(any(feature = "simulator", feature = "native-directories"))]
 pub mod directories;
 
-/// In-memory filesystem simulator for testing
-///
-/// Provides a complete filesystem simulation that runs entirely in memory, useful for testing
-/// filesystem operations without touching the actual disk.
+// Documented by the module itself: an outer doc comment here would make rustdoc resolve
+// the module's intra-doc links from the crate root.
 #[cfg(feature = "simulator")]
 pub mod simulator;
 

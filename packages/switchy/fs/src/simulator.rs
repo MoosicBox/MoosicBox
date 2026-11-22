@@ -21,8 +21,16 @@
 //!   the bytes a namespace may hold. A failed file synchronization forgets the file's
 //!   pending data ("fsyncgate").
 //!
+//! * **Timestamps.** Access, modification and creation times come from the simulated clock
+//!   (`switchy_time`) and are updated as POSIX specifies.
+//! * **Personalities.** A [`Personality`] selects POSIX semantics (the default) or Windows
+//!   semantics: open files cannot be removed or replaced, names are case-insensitive but
+//!   case-preserving, and symbolic links cannot be created.
+//! * **Switch points.** [`set_operation_hook`] installs a per-run callback that runs at
+//!   the start of every operation, outside every filesystem lock.
+//!
 //! All randomness comes from named streams of the current [`switchy_simulation`] run, so
-//! a simulation seed reproduces crash outcomes and faults exactly.
+//! a simulation seed reproduces crash outcomes, faults and temporary names exactly.
 //!
 //! Each simulation run (each `switchy_simulation` context) has its own default
 //! [`Filesystem`]; explicit namespaces are selected with [`with_filesystem`] and
@@ -3641,7 +3649,7 @@ mod async_file_io_tests {
 ///
 /// Names are drawn from the current simulation run's `switchy_fs::temp` stream, so a seed
 /// reproduces them, and creation retries with a fresh name when one already exists (as
-/// `tempfile` does). A [`TempDir`] remembers the [`Filesystem`](super::Filesystem) it was
+/// `tempfile` does). A [`TempDir`](temp_dir::TempDir) remembers the [`Filesystem`] it was
 /// created in and is removed from that namespace when dropped, whichever thread drops it.
 pub mod temp_dir {
     use std::{

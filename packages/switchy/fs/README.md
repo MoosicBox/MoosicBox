@@ -335,8 +335,30 @@ deterministic simulation:
   seeded probability, `Filesystem::inject_fault` queues one-shot faults, and
   `Filesystem::set_quota` limits stored bytes. A failed file synchronization forgets the
   pending data (Linux "fsyncgate" semantics).
+- **Timestamps**: `Metadata::accessed`/`modified`/`created` come from the simulated clock
+  (`switchy_time::now`) and change as on POSIX: creation sets all three, writing or
+  truncating a file updates `modified`, reading a file, listing a directory or reading a
+  symbolic link updates `accessed`, and creating, removing or renaming an entry updates
+  its directory's `modified`. Inspecting metadata changes nothing. Timestamps are not
+  crash-modeled (a crash keeps each surviving inode's current timestamps).
+- **Personalities**: `Filesystem::set_personality` (or `set_run_personality` for the run's
+  default namespace) selects `Personality::Posix` (the default) or
+  `Personality::Windows`. Under Windows, removing a file or renaming another file over it
+  while a handle on it is open fails with a sharing violation (raw os error 32 on Windows
+  hosts, `PermissionDenied`/`EACCES` elsewhere; renaming the open file itself is allowed),
+  names are case-insensitive but case-preserving (a rename to another spelling of the
+  same name changes its case), and creating a symbolic link fails for lack of privilege
+  (raw os error 1314 on Windows hosts, `PermissionDenied`/`EPERM` elsewhere).
+- **Operation hook**: `set_operation_hook(Some(hook))` installs a per-run
+  `Arc<dyn Fn(OpClass) + Send + Sync>` called at the start of every simulated operation
+  that touches a namespace (not when closing handles), before any filesystem lock is
+  taken. A deterministic scheduler can place a thread switch point there; operations the
+  hook performs itself do not call it again.
 - **Determinism**: every random choice draws from named streams of the current
-  `switchy_simulation` run, and each run has its own default `Filesystem`.
+  `switchy_simulation` run (`switchy_fs::crash`, `switchy_fs::faults`, `switchy_fs::temp`),
+  and each run has its own default `Filesystem`, operation hook and temporary directory
+  names. Nothing is shared between runs or kept per OS thread, so simulated threads of one
+  run (real OS threads taking turns) see the same state and parallel runs never interfere.
 
 ```rust
 use std::{io::Write as _, sync::Arc};
@@ -417,7 +439,11 @@ seed_relative_to(
 
 ### Temporary Directories
 
-The package provides temporary directory support that automatically cleans up when dropped:
+The package provides temporary directory support that automatically cleans up when dropped.
+In the simulator, names draw random alphanumeric characters from the run's
+`switchy_fs::temp` stream (so a seed reproduces them), creation retries with a fresh name
+when one exists, and a `TempDir` removes itself from the namespace it was created in,
+whichever thread drops it:
 
 ```rust
 use switchy_fs::{TempDir, tempdir, tempdir_in};
