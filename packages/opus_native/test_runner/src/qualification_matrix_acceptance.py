@@ -178,7 +178,7 @@ def verify_pipeline(root, entry):
         raise ValueError("files pipeline source manifest missing/stale")
     required = set(ci.PRODUCT_TESTS) | {
         ("moosicbox_audio_output", "opus-native", "opus_native_pipeline"),
-        ("moosicbox_files", "encoder-opus-native", "opus_pipeline"),
+        ("moosicbox_files", "files,encoder-opus-native", "opus_pipeline"),
     }
     expected = {(profile, *target) for profile in ("debug", "release") for target in required}
     seen = set()

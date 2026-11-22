@@ -173,7 +173,7 @@ def build_ledger(media_directory):
                                       for pid in ci.PLATFORMS for profile in ("debug", "release")],
         required_pipeline_suites=list(ci.PRODUCT_TESTS) + [
             ("moosicbox_audio_output", "opus-native", "opus_native_pipeline"),
-            ("moosicbox_files", "encoder-opus-native", "opus_pipeline"),
+            ("moosicbox_files", "files,encoder-opus-native", "opus_pipeline"),
         ],
         unit_completion_policy="actual --list minus --ignored --list; complete full suite or bounded shards in debug/release; timeout is failure",
         required_final_performance=dict(frames=500, minimum_repetitions=2,

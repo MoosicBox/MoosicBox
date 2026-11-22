@@ -972,10 +972,16 @@ fn stereo_silk_low_bitrate_product_regression() {
             bitrate,
             frame_size: rate as usize / 100,
         };
-        assert!(
-            SelectedOpusEncoder::new(config).is_err(),
-            "unsupported bitrate must fail during construction: {config:?}"
-        );
+        let mut encoder = SelectedOpusEncoder::new(config).unwrap();
+        let frames = config.frame_size * 2 + 7;
+        let mut bytes = encoder.encode(input(rate, 2, frames)).unwrap().to_vec();
+        bytes.extend_from_slice(&encoder.finish().unwrap());
+        let decoded = play(bytes, None);
+        assert_eq!(decoded.len(), 2, "{config:?}");
+        for channel in decoded {
+            assert_eq!(channel.len(), frames * (48000 / rate) as usize, "{config:?}");
+            assert!(channel.iter().all(|sample| sample.is_finite()), "{config:?}");
+        }
     }
 }
 
