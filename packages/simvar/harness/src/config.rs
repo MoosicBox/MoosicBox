@@ -13,24 +13,24 @@ use crate::{RUNS, formatting::TimeFormat as _};
 /// Configuration for a simulation run.
 ///
 /// Controls various aspects of the simulation environment including randomness,
-/// failure rates, network properties, and timing.
+/// network properties, and timing.
+///
+/// The network settings become the run's defaults: [`Self::min_message_latency`] and
+/// [`Self::max_message_latency`] the latency of the simulated network's links without a policy
+/// of their own, and [`Self::tcp_capacity`] the backlog of simulated TCP listeners. Faults
+/// beyond those are injected through [`crate::fault`].
 #[derive(Debug, Clone, Copy)]
 pub struct SimConfig {
     /// Random seed for reproducible simulations.
     pub seed: u64,
-    /// Probability (0.0 to 1.0) that a component will fail.
-    pub fail_rate: f64,
-    /// Probability (0.0 to 1.0) that a failed component will be repaired.
-    pub repair_rate: f64,
-    /// Maximum number of TCP messages in flight.
+    /// How many connections a simulated TCP listener queues before refusing more.
     pub tcp_capacity: u64,
-    /// Maximum number of UDP messages in flight.
-    pub udp_capacity: u64,
     /// Whether to randomize the order of actor execution.
     pub enable_random_order: bool,
-    /// Minimum simulated network latency.
+    /// The least latency of a message (or TCP segment) over the simulated network.
     pub min_message_latency: Duration,
-    /// Maximum simulated network latency.
+    /// The most latency of a message (or TCP segment) over the simulated network. Each
+    /// message's latency is drawn uniformly between the two.
     pub max_message_latency: Duration,
     /// How long the simulation should run (`Duration::MAX` for unlimited).
     pub duration: Duration,
@@ -58,13 +58,10 @@ impl SimConfig {
     pub const fn new() -> Self {
         Self {
             seed: 0,
-            fail_rate: 0.0,
-            repair_rate: 1.0,
             tcp_capacity: 64,
-            udp_capacity: 64,
             enable_random_order: false,
             min_message_latency: Duration::from_millis(0),
-            max_message_latency: Duration::from_secs(1),
+            max_message_latency: Duration::from_millis(0),
             duration: Duration::MAX,
             tick_duration: Duration::from_millis(1),
             #[cfg(feature = "time")]
@@ -117,18 +114,16 @@ impl SimConfig {
         let mut config = Self::new();
         config.seed = seed();
 
-        let min_message_latency = rng().gen_range_dist(0..=1000, 1.0);
+        // A few milliseconds: enough to reorder concurrent work, not so much that applications
+        // written without latency in mind time out. Simulations wanting more set it.
+        let min_message_latency = rng().gen_range(0..=5_u64);
+        let max_message_latency = rng().gen_range(min_message_latency..=min_message_latency + 20);
 
         let config = config
-            .fail_rate(0.0)
-            .repair_rate(1.0)
             .tcp_capacity(64)
-            .udp_capacity(64)
             .enable_random_order(true)
             .min_message_latency(Duration::from_millis(min_message_latency))
-            .max_message_latency(Duration::from_millis(
-                rng().gen_range(min_message_latency..2000),
-            ))
+            .max_message_latency(Duration::from_millis(max_message_latency))
             .duration(*DURATION);
 
         #[cfg(feature = "time")]
@@ -145,31 +140,10 @@ impl SimConfig {
         *config
     }
 
-    /// Sets the failure rate (0.0 to 1.0) and returns a mutable reference to self.
-    #[must_use]
-    pub const fn fail_rate(&mut self, fail_rate: f64) -> &mut Self {
-        self.fail_rate = fail_rate;
-        self
-    }
-
-    /// Sets the repair rate (0.0 to 1.0) and returns a mutable reference to self.
-    #[must_use]
-    pub const fn repair_rate(&mut self, repair_rate: f64) -> &mut Self {
-        self.repair_rate = repair_rate;
-        self
-    }
-
     /// Sets the TCP capacity and returns a mutable reference to self.
     #[must_use]
     pub const fn tcp_capacity(&mut self, tcp_capacity: u64) -> &mut Self {
         self.tcp_capacity = tcp_capacity;
-        self
-    }
-
-    /// Sets the UDP capacity and returns a mutable reference to self.
-    #[must_use]
-    pub const fn udp_capacity(&mut self, udp_capacity: u64) -> &mut Self {
-        self.udp_capacity = udp_capacity;
         self
     }
 
@@ -206,6 +180,18 @@ impl SimConfig {
     pub const fn tick_duration(&mut self, tick_duration: Duration) -> &mut Self {
         self.tick_duration = tick_duration;
         self
+    }
+
+    /// Make this configuration's network settings the current run's defaults: the latency of
+    /// the simulated network's links and the backlog of simulated TCP listeners.
+    pub(crate) fn apply(&self) {
+        switchy::network::set_default_policy(
+            switchy::network::LinkPolicy::reliable()
+                .with_latency(self.min_message_latency, self.max_message_latency),
+        );
+        switchy::tcp::simulator::set_listener_backlog(
+            usize::try_from(self.tcp_capacity).unwrap_or(usize::MAX),
+        );
     }
 }
 
@@ -409,10 +395,7 @@ pub fn run_info(props: &SimProperties) -> String {
         seed={seed}\n\
         run={runs}{extra_top}\n\
         tick_duration={tick_duration}\n\
-        fail_rate={fail_rate}\n\
-        repair_rate={repair_rate}\n\
         tcp_capacity={tcp_capacity}\n\
-        udp_capacity={udp_capacity}\n\
         enable_random_order={enable_random_order}\n\
         min_message_latency={min_message_latency}\n\
         max_message_latency={max_message_latency}\n\
@@ -420,10 +403,7 @@ pub fn run_info(props: &SimProperties) -> String {
         ",
         seed = config.seed,
         tick_duration = config.tick_duration.as_millis(),
-        fail_rate = config.fail_rate,
-        repair_rate = config.repair_rate,
         tcp_capacity = config.tcp_capacity,
-        udp_capacity = config.udp_capacity,
         enable_random_order = config.enable_random_order,
         min_message_latency = config.min_message_latency.as_millis(),
         max_message_latency = config.max_message_latency.as_millis(),
@@ -541,50 +521,38 @@ mod tests {
     }
 
     #[test_log::test]
-    #[allow(clippy::float_cmp)]
     fn test_simconfig_default() {
         let config = SimConfig::default();
         assert_eq!(config.seed, 0);
-        assert_eq!(config.fail_rate, 0.0);
-        assert_eq!(config.repair_rate, 1.0);
         assert_eq!(config.tcp_capacity, 64);
-        assert_eq!(config.udp_capacity, 64);
         assert!(!config.enable_random_order);
         assert_eq!(config.min_message_latency, Duration::from_millis(0));
-        assert_eq!(config.max_message_latency, Duration::from_secs(1));
+        assert_eq!(config.max_message_latency, Duration::ZERO);
         assert_eq!(config.duration, Duration::MAX);
         assert_eq!(config.tick_duration, Duration::from_millis(1));
     }
 
     #[test_log::test]
-    #[allow(clippy::float_cmp)]
     fn test_simconfig_new() {
         let config = SimConfig::new();
         assert_eq!(config.seed, 0);
-        assert_eq!(config.fail_rate, 0.0);
-        assert_eq!(config.repair_rate, 1.0);
+        assert_eq!(config.min_message_latency, Duration::ZERO);
+        assert_eq!(config.max_message_latency, Duration::ZERO);
     }
 
     #[test_log::test]
-    #[allow(clippy::float_cmp)]
     fn test_simconfig_builder_methods() {
         let mut config = SimConfig::new();
 
         let _ = config
-            .fail_rate(0.5)
-            .repair_rate(0.8)
             .tcp_capacity(128)
-            .udp_capacity(256)
             .enable_random_order(true)
             .min_message_latency(Duration::from_millis(10))
             .max_message_latency(Duration::from_secs(2))
             .duration(Duration::from_mins(1))
             .tick_duration(Duration::from_millis(5));
 
-        assert_eq!(config.fail_rate, 0.5);
-        assert_eq!(config.repair_rate, 0.8);
         assert_eq!(config.tcp_capacity, 128);
-        assert_eq!(config.udp_capacity, 256);
         assert!(config.enable_random_order);
         assert_eq!(config.min_message_latency, Duration::from_millis(10));
         assert_eq!(config.max_message_latency, Duration::from_secs(2));
@@ -593,15 +561,10 @@ mod tests {
     }
 
     #[test_log::test]
-    #[allow(clippy::float_cmp)]
     fn test_simconfig_builder_method_chaining() {
         let mut config = SimConfig::new();
-        let _ = config
-            .fail_rate(0.3)
-            .tcp_capacity(100)
-            .enable_random_order(true);
+        let _ = config.tcp_capacity(100).enable_random_order(true);
 
-        assert_eq!(config.fail_rate, 0.3);
         assert_eq!(config.tcp_capacity, 100);
         assert!(config.enable_random_order);
     }
@@ -772,7 +735,7 @@ mod tests {
     #[test_log::test]
     fn test_simresult_config_for_fail_variant() {
         let mut config = SimConfig::new();
-        let _ = config.udp_capacity(512);
+        let _ = config.tcp_capacity(512);
 
         let props = SimProperties {
             config,
@@ -794,16 +757,13 @@ mod tests {
             panic: Some("panic message".to_string()),
         };
 
-        assert_eq!(fail.config().udp_capacity, 512);
+        assert_eq!(fail.config().tcp_capacity, 512);
     }
 
     #[test_log::test]
     fn test_run_info_contains_config_values() {
         let mut config = SimConfig::new();
-        let _ = config
-            .fail_rate(0.5)
-            .tcp_capacity(128)
-            .enable_random_order(true);
+        let _ = config.tcp_capacity(128).enable_random_order(true);
 
         let props = SimProperties {
             config,
@@ -815,7 +775,6 @@ mod tests {
         let info = run_info(&props);
 
         assert!(info.contains("seed=0"));
-        assert!(info.contains("fail_rate=0.5"));
         assert!(info.contains("tcp_capacity=128"));
         assert!(info.contains("enable_random_order=true"));
     }

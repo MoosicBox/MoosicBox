@@ -22,6 +22,7 @@ simvar_ratatui = { workspace = true, optional = true }
 simvar_utils = { workspace = true }
 switchy = { workspace = true, features = [
     "async",
+    "network",
     "random",
     "simulation",
     "simulator",
@@ -42,6 +43,7 @@ thiserror       = { workspace = true }
 pretty_env_logger = { workspace = true, optional = true }
 
 [dev-dependencies]
+switchy  = { workspace = true, features = ["async-io"] }
 test-log = { workspace = true }
 
 [features]

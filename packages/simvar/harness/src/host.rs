@@ -4,6 +4,12 @@
 //! restarted during a simulation. Hosts are ideal for representing long-running services
 //! like servers, databases, or any component that should be able to recover from failures.
 //!
+//! A host can be [crashed](crate::fault::crash), [restarted](crate::fault::restart) and
+//! [bounced](crate::fault::bounce): a crash drops the host's async runtime with every task on
+//! it, without running any of them again, and a restart runs the host's factory again on a
+//! fresh runtime. Code running in a host can register a hook for its own crash with
+//! [`on_crash`].
+//!
 //! # Example
 //!
 //! ```rust,no_run
@@ -21,7 +27,7 @@
 //! # }
 //! ```
 
-use std::pin::Pin;
+use std::{cell::RefCell, pin::Pin, rc::Rc, task::Poll};
 
 use scoped_tls::scoped_thread_local;
 use simvar_utils::run_until_simulation_cancelled;
@@ -53,15 +59,45 @@ pub fn current_host() -> Option<String> {
     }
 }
 
-fn with_host<T>(name: String, f: impl FnOnce(&str) -> T) -> T {
-    let host = Handle { name };
-    HANDLE.set(&host, || f(&host.name))
+/// Register `hook` to run when the current host crashes, in its current incarnation only.
+///
+/// A restarted host registers its hooks again. Hooks run after the host's tasks are dropped,
+/// with the host's name. Hooks registered for every incarnation (with
+/// [`crate::fault::on_crash`]) run first.
+///
+/// # Panics
+///
+/// * If called outside a host
+pub fn on_crash(hook: impl FnMut(&str) + Send + 'static) {
+    let host = current_host().expect("host::on_crash called outside a host");
+    crate::fault::on_incarnation_crash(host, hook);
+}
+
+/// Run `f` as the host `name`: in its simulated TCP host scope, as its host, and as its node
+/// of the simulated network.
+fn in_host_scope<T>(name: &str, f: impl FnOnce() -> T) -> T {
+    with_tcp_host(name.to_owned(), |name| {
+        let host = Handle {
+            name: name.to_owned(),
+        };
+        HANDLE.set(&host, || switchy::network::with_node(name, f))
+    })
 }
 
 /// Result type for host actions.
 ///
 /// Hosts return `Ok(())` on success or an error on failure.
 pub type HostResult = Result<(), Box<dyn std::error::Error + Send + 'static>>;
+
+type HostFuture = Pin<Box<dyn Future<Output = Option<HostResult>> + 'static>>;
+
+/// One life of a host, from a start to a crash (or to the end of its action).
+struct Incarnation {
+    runtime: runtime::Runtime,
+    /// The host's action. A crash drops it at once, without polling it again.
+    future: Rc<RefCell<Option<HostFuture>>>,
+    handle: JoinHandle<Option<HostResult>>,
+}
 
 /// A host actor in the simulation.
 ///
@@ -75,9 +111,8 @@ pub type HostResult = Result<(), Box<dyn std::error::Error + Send + 'static>>;
 pub struct Host {
     pub(crate) name: String,
     #[allow(clippy::type_complexity)]
-    pub(crate) action: Box<dyn Fn() -> Pin<Box<dyn Future<Output = HostResult> + 'static>>>,
-    pub(crate) handle: Option<JoinHandle<Option<HostResult>>>,
-    pub(crate) runtime: runtime::Runtime,
+    action: Box<dyn Fn() -> Pin<Box<dyn Future<Output = HostResult> + 'static>>>,
+    incarnation: Option<Incarnation>,
 }
 
 impl Host {
@@ -85,8 +120,7 @@ impl Host {
         name: impl Into<String>,
         action: F,
     ) -> Self {
-        let runtime = runtime::Runtime::new();
-        let action = std::rc::Rc::new(action);
+        let action = Rc::new(action);
         let name = name.into();
         Self {
             name: name.clone(),
@@ -94,44 +128,79 @@ impl Host {
                 let action = action.clone();
                 let name = name.clone();
                 Box::pin(async move {
-                    with_tcp_host(name.clone(), |name| {
-                        log::debug!("starting tcp host on name={name}");
-                        with_host(name.to_string(), |name| {
-                            log::debug!("starting host on name={name}");
-                            action()
-                        })
-                    })
-                    .await
+                    log::debug!("starting host on name={name}");
+                    in_host_scope(&name, || action()).await
                 })
             }),
-            handle: None,
-            runtime,
+            incarnation: None,
         }
     }
 
+    /// Start a new incarnation on a fresh runtime.
     pub(crate) fn start(&mut self) {
-        assert!(!self.has_started(), "Host {} already started", self.name);
+        assert!(!self.is_running(), "Host {} already running", self.name);
 
-        self.handle = Some(
-            self.runtime
-                .spawn_local(run_until_simulation_cancelled((self.action)())),
-        );
+        let runtime = runtime::Runtime::new();
+        let future: HostFuture = Box::pin(run_until_simulation_cancelled((self.action)()));
+        let future = Rc::new(RefCell::new(Some(future)));
+        let slot = Rc::clone(&future);
+        let handle = runtime.spawn_local(std::future::poll_fn(move |cx| {
+            let mut slot = slot.borrow_mut();
+            let Some(future) = slot.as_mut() else {
+                // Crashed: never resolves, and is never polled again.
+                return Poll::Pending;
+            };
+            let poll = future.as_mut().poll(cx);
+            if poll.is_ready() {
+                *slot = None;
+            }
+            poll
+        }));
+        self.incarnation = Some(Incarnation {
+            runtime,
+            future,
+            handle,
+        });
     }
 
-    pub(crate) const fn has_started(&self) -> bool {
-        self.handle.is_some()
+    /// Kill the current incarnation: drop its action now and abandon its runtime, so none of
+    /// its tasks runs again.
+    pub(crate) fn crash(&mut self) {
+        let Some(incarnation) = self.incarnation.take() else {
+            return;
+        };
+        let future = incarnation.future.borrow_mut().take();
+        // Drop the action as the host, for anything its destructors do.
+        in_host_scope(&self.name, || drop(future));
+        drop(incarnation);
     }
 
-    pub(crate) fn is_running(&mut self) -> bool {
-        self.handle.as_mut().is_some_and(|x| !x.is_finished())
+    /// Whether an incarnation is running.
+    pub(crate) fn is_running(&self) -> bool {
+        self.incarnation
+            .as_ref()
+            .is_some_and(|x| !x.handle.is_finished())
+    }
+
+    /// Whether the host is down: crashed, or not started yet.
+    pub(crate) const fn is_down(&self) -> bool {
+        self.incarnation.is_none()
+    }
+
+    /// The result of the current incarnation, waiting for it to finish if need be.
+    pub(crate) fn join(&mut self) -> Result<Option<HostResult>, switchy::unsync::task::JoinError> {
+        let Some(incarnation) = self.incarnation.take() else {
+            return Ok(None);
+        };
+        incarnation.runtime.block_on(incarnation.handle)
     }
 }
 
 impl Actor for Host {
     fn tick(&self) {
-        with_tcp_host(self.name.clone(), |_| {
-            with_host(self.name.clone(), |_| self.runtime.tick());
-        });
+        if let Some(incarnation) = &self.incarnation {
+            in_host_scope(&self.name, || incarnation.runtime.tick());
+        }
     }
 }
 

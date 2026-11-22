@@ -8,6 +8,8 @@
 //!
 //! * **Deterministic execution** - Same seed produces identical simulation results
 //! * **Host and client actors** - Model persistent services (hosts) and ephemeral clients
+//! * **Fault injection** - Crash, restart and bounce hosts, and partition or degrade the
+//!   simulated network ([`fault`])
 //! * **Simulation lifecycle hooks** - Customize behavior at key points via [`SimBootstrap`]
 //! * **Built-in TUI** - Optional terminal UI for monitoring simulation progress
 //! * **Parallel execution** - Run multiple simulation runs concurrently
@@ -125,6 +127,9 @@ mod fleet;
 ///
 /// [`TimeFormat`]: formatting::TimeFormat
 pub mod formatting;
+
+/// Fault injection: crash, restart and bounce hosts, and break the simulated network.
+pub mod fault;
 
 /// Host actor types and utilities.
 ///
@@ -1065,6 +1070,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         switchy::random::simulator::reset_rng();
         switchy::tcp::simulator::reset();
+        switchy::network::reset();
         #[cfg(feature = "fs")]
         switchy::fs::simulator::reset_fs();
         #[cfg(feature = "time")]
@@ -1082,6 +1088,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         self.bootstrap.init();
 
         let config = self.bootstrap.build_sim(SimConfig::from_rng());
+        config.apply();
         let duration = config.duration;
         let duration_steps = duration.as_millis();
 
@@ -1407,10 +1414,68 @@ pub trait SimBootstrap: Send + Sync + 'static {
     fn on_end(&self, #[allow(unused)] sim: &mut impl Sim) {}
 }
 
-/// Interface for managing simulation actors (hosts and clients).
+/// Interface for managing simulation actors (hosts and clients) and injecting faults.
+///
+/// The fault methods have default implementations through [`fault`], whose functions can also
+/// be called from inside actors (a nemesis client, for example).
 pub trait Sim {
-    /// Simulates a host restart by name.
+    /// Crash a host and restart it from its factory (see [`fault::bounce`]).
     fn bounce(&mut self, host: impl Into<String>);
+
+    /// Crash a host and leave it down until restarted (see [`fault::crash`]).
+    fn crash(&mut self, host: impl Into<String>) {
+        fault::crash(host);
+    }
+
+    /// Restart a crashed host from its factory (see [`fault::restart`]).
+    fn restart(&mut self, host: impl Into<String>) {
+        fault::restart(host);
+    }
+
+    /// Crash a host and restart it after `delay` of simulated time (see
+    /// [`fault::bounce_after`]).
+    fn bounce_after(&mut self, host: impl Into<String>, delay: Duration) {
+        fault::bounce_after(host, delay);
+    }
+
+    /// Run `hook` every time `host` crashes (see [`fault::on_crash`]).
+    fn on_crash(&mut self, host: impl Into<String>, hook: impl FnMut(&str) + Send + 'static) {
+        fault::on_crash(host, hook);
+    }
+
+    /// Partition the nodes of `a` from those of `b`, in both directions (see
+    /// [`switchy::network::partition`]).
+    fn partition(&mut self, a: &[&str], b: &[&str]) {
+        switchy::network::partition(a, b);
+    }
+
+    /// Block messages from the nodes of `from` to those of `to` only (see
+    /// [`switchy::network::partition_one_way`]).
+    fn partition_one_way(&mut self, from: &[&str], to: &[&str]) {
+        switchy::network::partition_one_way(from, to);
+    }
+
+    /// Cut `node` off from every other node (see [`switchy::network::isolate`]).
+    fn isolate(&mut self, node: &str) {
+        switchy::network::isolate(node);
+    }
+
+    /// Heal every partition and isolation (see [`switchy::network::heal`]).
+    fn heal(&mut self) {
+        switchy::network::heal();
+    }
+
+    /// Set the policy of the link from `from` to `to` (see
+    /// [`switchy::network::set_link_policy`]).
+    fn set_link_policy(&mut self, from: &str, to: &str, policy: switchy::network::LinkPolicy) {
+        switchy::network::set_link_policy(from, to, policy);
+    }
+
+    /// Set the policy of links without one of their own (see
+    /// [`switchy::network::set_default_policy`]).
+    fn set_default_link_policy(&mut self, policy: switchy::network::LinkPolicy) {
+        switchy::network::set_default_policy(policy);
+    }
 
     /// Spawns a host actor with the given name and action.
     ///
@@ -1437,6 +1502,8 @@ struct ManagedSim {
     hosts: Vec<Host>,
     clients: Vec<Client>,
     start: Option<SystemTime>,
+    /// Hosts to restart, and when, in the order their bounces were applied.
+    restarts: Vec<(SystemTime, String)>,
 }
 
 impl ManagedSim {
@@ -1446,7 +1513,67 @@ impl ManagedSim {
             hosts: vec![],
             clients: vec![],
             start: None,
+            restarts: vec![],
         }
+    }
+
+    /// Apply the queued host lifecycle changes, then the restarts that are due.
+    fn apply_faults(&mut self) {
+        for command in fault::take_commands() {
+            match command {
+                fault::Command::Crash(host) => self.crash_host(&host),
+                fault::Command::Restart(host) => self.restart_host(&host),
+                fault::Command::Bounce(host, delay) => {
+                    self.crash_host(&host);
+                    if delay.is_zero() {
+                        self.restart_host(&host);
+                    } else {
+                        let at = switchy::time::now() + delay;
+                        self.restarts.push((at, host));
+                    }
+                }
+            }
+        }
+        let now = switchy::time::now();
+        let (due, later) = std::mem::take(&mut self.restarts)
+            .into_iter()
+            .partition::<Vec<_>, _>(|(at, _)| *at <= now);
+        self.restarts = later;
+        for (_, host) in due {
+            self.restart_host(&host);
+        }
+    }
+
+    fn crash_host(&mut self, name: &str) {
+        let Some(host) = self.hosts.iter_mut().find(|x| x.name == name) else {
+            log::warn!("cannot crash host={name}: no such host");
+            return;
+        };
+        if !host.is_running() {
+            log::debug!("not crashing host={name}: it is not running");
+            return;
+        }
+        log::debug!("crashing host={name}");
+        // Its network node goes down first, so nothing it owned sends or receives again.
+        switchy::network::node_down(name);
+        host.crash();
+        fault::set_status(name, fault::HostStatus::Down);
+        fault::run_crash_hooks(name);
+    }
+
+    fn restart_host(&mut self, name: &str) {
+        let Some(host) = self.hosts.iter_mut().find(|x| x.name == name) else {
+            log::warn!("cannot restart host={name}: no such host");
+            return;
+        };
+        if !host.is_down() {
+            log::debug!("not restarting host={name}: it is not down");
+            return;
+        }
+        log::debug!("restarting host={name}");
+        switchy::network::node_up(name);
+        host.start();
+        fault::set_status(name, fault::HostStatus::Running);
     }
 
     pub fn elapsed(&self) -> Duration {
@@ -1459,19 +1586,19 @@ impl ManagedSim {
     pub fn start(&mut self) {
         self.start = Some(switchy::time::now());
 
-        for host in self.hosts.iter_mut().filter(|x| !x.has_started()) {
+        for host in self.hosts.iter_mut().filter(|x| x.is_down()) {
             host.start();
+            fault::set_status(&host.name, fault::HostStatus::Running);
         }
-        for client in &mut self.clients {
+        for client in self.clients.iter_mut().filter(|x| !x.has_started()) {
             client.start();
         }
     }
 
     pub fn step(&mut self) -> Result<bool, Error> {
         log::trace!("step {}", current_step());
-        // if current_step() == 300 {
-        //     panic!();
-        // }
+
+        self.apply_faults();
 
         let mut actors = self
             .hosts
@@ -1500,16 +1627,13 @@ impl ManagedSim {
         let mut remaining_hosts = vec![];
 
         for mut host in self.hosts.drain(..) {
-            if host.is_running() {
+            // A crashed host stays, to be restarted.
+            if host.is_running() || host.is_down() {
                 remaining_hosts.push(host);
                 continue;
             }
-            if let Some(handle) = host.handle {
-                host.runtime
-                    .block_on(handle)?
-                    .transpose()
-                    .map_err(Error::Step)?;
-            }
+            fault::set_status(&host.name, fault::HostStatus::Finished);
+            host.join()?.transpose().map_err(Error::Step)?;
         }
 
         self.hosts = remaining_hosts;
@@ -1547,22 +1671,23 @@ impl ManagedSim {
             }
 
             let host_count = self.hosts.len();
-            for (i, host) in self.hosts.drain(..).enumerate() {
+            for (i, mut host) in self.hosts.drain(..).enumerate() {
                 log::debug!("cancelling host {}/{host_count}!", i + 1);
-                if let Some(handle) = host.handle {
-                    host.runtime
-                        .block_on(handle)?
-                        .transpose()
-                        .map_err(Error::Step)?;
-                }
+                fault::set_status(&host.name, fault::HostStatus::Finished);
+                host.join()?.transpose().map_err(Error::Step)?;
             }
+            self.restarts.clear();
         }
 
         if current_step().is_multiple_of(1000) || END_SIM.load(Ordering::SeqCst) {
             log::debug!("hosts={} clients={}", self.hosts.len(), self.clients.len());
         }
 
-        Ok(self.hosts.is_empty() && self.clients.is_empty())
+        // Crashed hosts keep the simulation going only while a restart is coming.
+        let hosts_done = self.hosts.iter().all(|host| {
+            host.is_down() && !self.restarts.iter().any(|(_, name)| *name == host.name)
+        });
+        Ok(hosts_done && self.clients.is_empty() && !fault::has_commands())
     }
 
     #[allow(clippy::unused_self)]
@@ -1575,6 +1700,7 @@ impl Sim for ManagedSim {
     fn bounce(&mut self, host: impl Into<String>) {
         let host = host.into();
         log::debug!("bouncing host={host}");
+        fault::bounce(host);
     }
 
     fn host<F: Fn() -> Fut + 'static, Fut: Future<Output = HostResult> + 'static>(
@@ -1584,7 +1710,13 @@ impl Sim for ManagedSim {
     ) {
         let name = name.into();
         log::debug!("starting host with name={name}");
-        self.hosts.push(Host::new(name, action));
+        let mut host = Host::new(name, action);
+        // Hosts added once the simulation runs start at once.
+        if self.start.is_some() {
+            host.start();
+            fault::set_status(&host.name, fault::HostStatus::Running);
+        }
+        self.hosts.push(host);
     }
 
     fn client(
@@ -1594,10 +1726,18 @@ impl Sim for ManagedSim {
     ) {
         let name = name.into();
         log::debug!("starting client with name={name}");
-        self.clients.push(Client::new(name, action));
+        let mut client = Client::new(name, action);
+        // Clients added once the simulation runs start at once.
+        if self.start.is_some() {
+            client.start();
+        }
+        self.clients.push(client);
     }
 }
 
 pub(crate) trait Actor {
     fn tick(&self);
 }
+
+#[cfg(test)]
+mod tests;

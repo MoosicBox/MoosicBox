@@ -170,7 +170,48 @@ sim.client("load_client", async {
 });
 ```
 
-**Note:** The `bounce` method is currently a placeholder and does not restart hosts. Full host bouncing functionality is planned for a future release.
+### Fault Injection
+
+The `fault` module crashes, restarts and bounces hosts, and breaks the simulated
+network (`switchy::network`), from `on_step` or from inside any actor. A
+*nemesis* client is the usual way to inject faults on a schedule:
+
+```rust
+use std::time::Duration;
+
+use simvar_harness::{fault, switchy};
+
+sim.on_crash("db", |host| {
+    // Crash whatever else the host owns, e.g. its simulated filesystem.
+});
+
+sim.client("nemesis", async {
+    switchy::unsync::time::sleep(Duration::from_secs(1)).await;
+    fault::network::partition(["n1"], ["n2", "n3"]);
+    fault::bounce_after("n2", Duration::from_millis(500));
+    switchy::unsync::time::sleep(Duration::from_secs(1)).await;
+    fault::network::heal();
+    Ok(())
+});
+```
+
+- `fault::crash(host)` drops the host's runtime and every task on it at once,
+  without polling them again, takes its network node down (dropping its
+  messages in flight and resetting its TCP connections), then runs its crash
+  hooks. The host stays down until `fault::restart(host)`.
+- `fault::bounce(host)` / `fault::bounce_after(host, delay)` crash and restart
+  it from its factory on a fresh runtime, at once or after `delay` of simulated
+  time.
+- `fault::on_crash(host, hook)` (or `Sim::on_crash`) registers a hook for every
+  crash of a host; `host::on_crash(hook)` registers one, from inside a host, for
+  its current incarnation only.
+- `fault::network` partitions (symmetric and one-way), isolates and heals nodes,
+  and sets link policies (latency, loss, duplication, reordering). Hosts and
+  clients are nodes named after themselves.
+
+Lifecycle changes apply at the start of the next step; network changes at once.
+Everything random is drawn from the run's seed, so a seed replays the same
+faults.
 
 ## Environment Configuration
 

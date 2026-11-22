@@ -107,7 +107,7 @@ impl Client {
         );
     }
 
-    const fn has_started(&self) -> bool {
+    pub(crate) const fn has_started(&self) -> bool {
         self.handle.is_some()
     }
 
@@ -118,7 +118,10 @@ impl Client {
 
 impl Actor for Client {
     fn tick(&self) {
-        with_client(self.name.clone(), |_| self.runtime.tick());
+        // A client is a node of the simulated network too.
+        with_client(self.name.clone(), |name| {
+            switchy::network::with_node(name, || self.runtime.tick());
+        });
     }
 }
 
