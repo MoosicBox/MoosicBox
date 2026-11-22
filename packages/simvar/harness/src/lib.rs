@@ -1268,10 +1268,14 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         } else {
             SimResult::Success { props, run }
         };
+        // Another run's failure (or a stop) cut this one short: its threads were cut off, not
+        // leaked.
+        #[cfg(feature = "thread")]
+        let cut_short = spec.kind == RunKind::Fleet && END_SIM.load(Ordering::SeqCst);
         #[cfg(feature = "thread")]
         let result = match result {
             SimResult::Success { props, run }
-                if !leaked_threads.is_empty() && !allow_thread_leaks() =>
+                if !leaked_threads.is_empty() && !allow_thread_leaks() && !cut_short =>
             {
                 SimResult::Fail {
                     props,
