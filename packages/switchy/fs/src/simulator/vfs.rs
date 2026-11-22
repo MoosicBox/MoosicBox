@@ -41,7 +41,7 @@ use std::{
 };
 
 use super::{
-    Filesystem,
+    Filesystem, Personality,
     fault::{CrashPolicy, DirectoryOpLoss, Fault, FaultPlan, FileDataLoss, OpClass},
 };
 use crate::{
@@ -275,6 +275,7 @@ pub struct Vfs {
     plan: FaultPlan,
     injected: VecDeque<(OpClass, Fault)>,
     locks: BTreeMap<Ino, LockState>,
+    personality: Personality,
 }
 
 impl Default for Vfs {
@@ -320,6 +321,7 @@ impl Vfs {
             plan: FaultPlan::new(),
             injected: VecDeque::new(),
             locks: BTreeMap::new(),
+            personality: Personality::Posix,
         }
     }
 
@@ -331,6 +333,7 @@ impl Vfs {
         fresh.next_handle = self.next_handle;
         fresh.umask = self.umask;
         fresh.quota = self.quota;
+        fresh.personality = self.personality;
         fresh.plan = std::mem::take(&mut self.plan);
         fresh.injected = std::mem::take(&mut self.injected);
         *self = fresh;
@@ -353,6 +356,18 @@ impl Vfs {
 
     pub const fn set_umask(&mut self, umask: u32) {
         self.umask = umask & 0o777;
+    }
+
+    pub const fn personality(&self) -> Personality {
+        self.personality
+    }
+
+    pub const fn set_personality(&mut self, personality: Personality) {
+        self.personality = personality;
+    }
+
+    const fn is_windows(&self) -> bool {
+        matches!(self.personality, Personality::Windows)
     }
 
     pub const fn set_quota(&mut self, quota: Option<u64>) {
@@ -451,6 +466,41 @@ impl Vfs {
             Ok(())
         } else {
             Err(Errno::Access)
+        }
+    }
+
+    /// The entry `name` of directory `dir`: its stored name and inode. Under the Windows
+    /// personality names match case-insensitively (an exact match wins).
+    fn find(&self, dir: Ino, name: &OsStr) -> Result<Option<(&OsString, Ino)>> {
+        let entries = &self.dir(dir)?.entries;
+        if let Some((stored, ino)) = entries.get_key_value(name) {
+            return Ok(Some((stored, *ino)));
+        }
+        if !self.is_windows() {
+            return Ok(None);
+        }
+        Ok(entries
+            .iter()
+            .find(|(stored, _)| eq_ignoring_case(stored, name))
+            .map(|(stored, ino)| (stored, *ino)))
+    }
+
+    /// The spelling the final component of `to` requests when, under the Windows
+    /// personality, it differs from the `stored` spelling of the entry it names.
+    fn respelling(&self, to: &Path, stored: &OsStr) -> Option<OsString> {
+        to.file_name()
+            .filter(|requested| self.is_windows() && *requested != stored)
+            .map(OsStr::to_os_string)
+    }
+
+    /// Under the Windows personality an open file cannot be removed or replaced: files are
+    /// opened without delete sharing, so the attempt is a sharing violation.
+    fn ensure_not_open(&self, ino: Ino) -> Result<()> {
+        let inode = self.inode(ino)?;
+        if self.is_windows() && inode.open > 0 && !inode.is_dir() {
+            Err(Errno::SharingViolation)
+        } else {
+            Ok(())
         }
     }
 
@@ -606,7 +656,7 @@ impl Vfs {
                     parent
                 }
                 Comp::Name(name) => {
-                    let child = *self.dir(current)?.entries.get(name).ok_or_else(|| {
+                    let (_, child) = self.find(current, name)?.ok_or_else(|| {
                         self.check_access(current, SEARCH)
                             .err()
                             .unwrap_or(Errno::NoEnt)
@@ -641,11 +691,16 @@ impl Vfs {
         match last {
             Comp::Name(name) => {
                 let dir = self.walk(start, init, depth)?;
-                let ino = self.dir(dir)?.entries.get(name).copied();
+                // An existing entry is named as stored (its case may differ under the
+                // Windows personality); a missing one as requested.
+                let (name, ino) = match self.find(dir, name)? {
+                    Some((stored, ino)) => (stored.clone(), Some(ino)),
+                    None => (name.clone(), None),
+                };
                 self.check_access(dir, SEARCH)?;
                 Ok(Entry::Named {
                     dir,
-                    name: name.clone(),
+                    name,
                     ino,
                     trailing,
                 })
@@ -1364,6 +1419,7 @@ impl Vfs {
                 if trailing {
                     return Err(Errno::NotDir);
                 }
+                self.ensure_not_open(ino)?;
                 self.unlink(dir, &name)
             }
         }
@@ -1426,6 +1482,8 @@ impl Vfs {
             self.fault(OpClass::DirOp)?;
             if self.is_dir(ino) {
                 self.remove_children(ino)?;
+            } else {
+                self.ensure_not_open(ino)?;
             }
             self.unlink(dir, &name)?;
         }
@@ -1454,8 +1512,8 @@ impl Vfs {
         let source = source.ok_or(Errno::NoEnt)?;
         let Entry::Named {
             dir: to_dir,
-            name: to_name,
-            ino: target,
+            name: mut to_name,
+            ino: mut target,
             trailing: to_trailing,
         } = self.resolve_entry(to_start, to, false)?
         else {
@@ -1469,7 +1527,17 @@ impl Vfs {
             return Err(Errno::NotDir);
         }
         if target == Some(source) {
-            return Ok(());
+            // Under the Windows personality, renaming an entry to another spelling of its
+            // own name changes the stored case; otherwise renaming onto the same inode
+            // does nothing.
+            let respelled = (from_dir == to_dir && to_name == from_name)
+                .then(|| self.respelling(to, &from_name))
+                .flatten();
+            let Some(requested) = respelled else {
+                return Ok(());
+            };
+            target = None;
+            to_name = requested;
         }
         self.check_access(from_dir, WRITE | SEARCH)?;
         self.check_access(to_dir, WRITE | SEARCH)?;
@@ -1482,6 +1550,7 @@ impl Vfs {
                 }
                 _ => {}
             }
+            self.ensure_not_open(target)?;
         }
         if source_is_dir {
             let mut ancestor = to_dir;
@@ -1497,34 +1566,38 @@ impl Vfs {
         }
         self.ensure_linked(to_dir)?;
 
+        let mut changes = vec![Change {
+            dir: from_dir,
+            name: from_name.clone(),
+            new: None,
+        }];
         if let Some(target) = target {
             self.dir_mut(to_dir)?.entries.remove(&to_name);
             self.account(target, |inode| inode.nlink = inode.nlink.saturating_sub(1))?;
+            // Under the Windows personality the replacing entry takes the requested
+            // spelling of the name.
+            if let Some(requested) = self.respelling(to, &to_name) {
+                changes.push(Change {
+                    dir: to_dir,
+                    name: std::mem::replace(&mut to_name, requested),
+                    new: None,
+                });
+            }
         }
+        changes.push(Change {
+            dir: to_dir,
+            name: to_name.clone(),
+            new: Some(source),
+        });
         self.dir_mut(from_dir)?.entries.remove(&from_name);
-        self.dir_mut(to_dir)?
-            .entries
-            .insert(to_name.clone(), source);
+        self.dir_mut(to_dir)?.entries.insert(to_name, source);
         self.mark_modified(from_dir);
         self.mark_modified(to_dir);
         if let Node::Dir(dir) = &mut self.inode_mut(source)?.node {
             dir.parent = to_dir;
         }
         self.inode_mut(source)?.journal_refs += 1;
-        self.journal.push(JournalOp {
-            changes: vec![
-                Change {
-                    dir: from_dir,
-                    name: from_name,
-                    new: None,
-                },
-                Change {
-                    dir: to_dir,
-                    name: to_name,
-                    new: Some(source),
-                },
-            ],
-        });
+        self.journal.push(JournalOp { changes });
         if let Some(target) = target {
             self.maybe_gc(target);
         }
@@ -1564,6 +1637,11 @@ impl Vfs {
 
     pub fn symlink(&mut self, target: &Path, start: Ino, link: &Path) -> Result<()> {
         self.fault(OpClass::DirOp)?;
+        if self.is_windows() {
+            // Creating symbolic links needs `SeCreateSymbolicLinkPrivilege`, which an
+            // ordinary (non-elevated, non-developer-mode) process lacks.
+            return Err(Errno::PrivilegeNotHeld);
+        }
         if target.as_os_str().is_empty() {
             return Err(Errno::NoEnt);
         }
@@ -1658,6 +1736,25 @@ const fn unlink_dir_errno() -> Errno {
         Errno::IsDir
     } else {
         Errno::Perm
+    }
+}
+
+/// Whether `a` and `b` are equal ignoring case, as Windows compares names: character by
+/// character with simple (one-to-one) uppercase mapping. Names that are not valid
+/// Unicode compare ignoring ASCII case.
+fn eq_ignoring_case(a: &OsStr, b: &OsStr) -> bool {
+    fn upper(c: char) -> char {
+        let mut upper = c.to_uppercase();
+        match (upper.next(), upper.next()) {
+            (Some(single), None) => single,
+            _ => c,
+        }
+    }
+    match (a.to_str(), b.to_str()) {
+        (Some(a), Some(b)) => a.chars().map(upper).eq(b.chars().map(upper)),
+        _ => a
+            .as_encoded_bytes()
+            .eq_ignore_ascii_case(b.as_encoded_bytes()),
     }
 }
 

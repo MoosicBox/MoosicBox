@@ -189,6 +189,31 @@ fn detached_handle(content: Vec<u8>, read: bool, write: bool) -> std::io::Result
     handle
 }
 
+/// The operating system whose filesystem semantics a simulated namespace follows.
+///
+/// The personality changes only the behaviours listed for it; durability, crashes,
+/// faults, permissions and `errno` values otherwise follow the POSIX model.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Personality {
+    /// POSIX semantics (the default).
+    #[default]
+    Posix,
+    /// Windows (NTFS) semantics:
+    ///
+    /// * Removing a file, or renaming another file over it, while a handle on it is open
+    ///   fails with a sharing violation (`ERROR_SHARING_VIOLATION`, raw os error 32, on
+    ///   Windows hosts; `PermissionDenied`/`EACCES` elsewhere), as for files opened
+    ///   without delete sharing. Renaming an open file itself is allowed.
+    /// * Names are case-insensitive but case-preserving: lookups match any case, a new
+    ///   entry keeps the case it was created with, creating another spelling of an
+    ///   existing name finds the existing entry, and renaming an entry to another
+    ///   spelling of its own name changes its case.
+    /// * Creating a symbolic link fails with `ERROR_PRIVILEGE_NOT_HELD` (raw os error
+    ///   1314, on Windows hosts; `PermissionDenied`/`EPERM` elsewhere), as for a process
+    ///   without the symbolic link privilege.
+    Windows,
+}
+
 /// An independently owned simulated filesystem namespace.
 ///
 /// Select it with [`with_filesystem`] for synchronous work or [`scope_filesystem`] for a
@@ -210,6 +235,7 @@ impl std::fmt::Debug for Filesystem {
         let vfs = self.vfs();
         f.debug_struct("Filesystem")
             .field("credentials", &vfs.credentials())
+            .field("personality", &vfs.personality())
             .field("used_bytes", &vfs.used())
             .finish_non_exhaustive()
     }
@@ -324,6 +350,30 @@ impl Filesystem {
     pub fn umask(&self) -> u32 {
         self.vfs().umask()
     }
+
+    /// Follow the filesystem semantics of `personality` from now on.
+    ///
+    /// Choose the personality before creating entries: names that differ only in case
+    /// and already exist when switching to [`Personality::Windows`] stay distinct
+    /// entries, and lookups match the first of them in name order.
+    pub fn set_personality(&self, personality: Personality) {
+        self.vfs().set_personality(personality);
+    }
+
+    /// The personality whose semantics the namespace follows.
+    #[must_use]
+    pub fn personality(&self) -> Personality {
+        self.vfs().personality()
+    }
+}
+
+/// Set the personality of the current simulation run's default namespace (the one used
+/// where no [`with_filesystem`]/[`scope_filesystem`] selection applies); see
+/// [`Filesystem::set_personality`].
+pub fn set_run_personality(personality: Personality) {
+    switchy_simulation::state::<RunFilesystem>()
+        .0
+        .set_personality(personality);
 }
 
 /// Simulate a crash of `filesystem`; see [`Filesystem::crash`].

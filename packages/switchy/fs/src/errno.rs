@@ -3,7 +3,9 @@
 //! The simulator reports failures as the same `std::io::Error` values the host operating
 //! system produces. On Unix every error is built from the host's raw `errno`, so both
 //! [`std::io::Error::kind`] and [`std::io::Error::raw_os_error`] match what a native call
-//! returns. Other platforms receive the closest [`std::io::ErrorKind`].
+//! returns. Other platforms receive the closest [`std::io::ErrorKind`], except that the
+//! Windows-only errors of the simulated Windows personality carry their native Windows
+//! error codes on Windows hosts.
 
 /// A POSIX error number reported by a filesystem operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +42,12 @@ pub enum Errno {
     WouldBlock,
     /// `EXDEV`: the operation crosses filesystems (simulated namespaces).
     XDev,
+    /// Windows `ERROR_SHARING_VIOLATION`: the file is open (simulated Windows
+    /// personality). Reported as `EACCES` on Unix hosts.
+    SharingViolation,
+    /// Windows `ERROR_PRIVILEGE_NOT_HELD`: creating a symbolic link needs a privilege the
+    /// process lacks (simulated Windows personality). Reported as `EPERM` on Unix hosts.
+    PrivilegeNotHeld,
 }
 
 impl Errno {
@@ -54,8 +62,8 @@ impl Errno {
             Self::IsDir => E::ISDIR,
             Self::NotEmpty => E::NOTEMPTY,
             Self::Loop => E::LOOP,
-            Self::Access => E::ACCESS,
-            Self::Perm => E::PERM,
+            Self::Access | Self::SharingViolation => E::ACCESS,
+            Self::Perm | Self::PrivilegeNotHeld => E::PERM,
             Self::NoSpc => E::NOSPC,
             Self::Io => E::IO,
             Self::BadF => E::BADF,
@@ -79,7 +87,9 @@ impl Errno {
             Self::IsDir => K::IsADirectory,
             Self::NotEmpty => K::DirectoryNotEmpty,
             Self::Loop | Self::Io | Self::BadF => K::Other,
-            Self::Access | Self::Perm => K::PermissionDenied,
+            Self::Access | Self::Perm | Self::SharingViolation | Self::PrivilegeNotHeld => {
+                K::PermissionDenied
+            }
             Self::NoSpc => K::StorageFull,
             Self::Inval => K::InvalidInput,
             Self::Stale => K::StaleNetworkFileHandle,
@@ -96,7 +106,19 @@ impl From<Errno> for std::io::Error {
         {
             Self::from_raw_os_error(errno.raw())
         }
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        {
+            /// `ERROR_SHARING_VIOLATION`.
+            const SHARING_VIOLATION: i32 = 32;
+            /// `ERROR_PRIVILEGE_NOT_HELD`.
+            const PRIVILEGE_NOT_HELD: i32 = 1314;
+            match errno {
+                Errno::SharingViolation => Self::from_raw_os_error(SHARING_VIOLATION),
+                Errno::PrivilegeNotHeld => Self::from_raw_os_error(PRIVILEGE_NOT_HELD),
+                _ => Self::new(errno.kind(), format!("{errno:?}")),
+            }
+        }
+        #[cfg(not(any(unix, windows)))]
         {
             Self::new(errno.kind(), format!("{errno:?}"))
         }
