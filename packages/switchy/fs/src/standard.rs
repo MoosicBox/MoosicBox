@@ -654,6 +654,7 @@ pub mod sync {
         // Field widths and signedness differ between Unix platforms.
         #[allow(
             clippy::cast_sign_loss,
+            clippy::cast_possible_wrap,
             clippy::unnecessary_cast,
             clippy::useless_conversion,
             clippy::cast_lossless
