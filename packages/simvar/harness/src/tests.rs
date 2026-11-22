@@ -567,3 +567,25 @@ fn a_bootstrap_reads_each_runs_interleaving_coverage_from_its_result() {
     assert!(result.run().coverage.is_none());
     assert_eq!(*bootstrap.coverage.lock().unwrap(), vec![None]);
 }
+
+/// Reconfigures the run's clock as it starts, as simulations that pick a tick per run do.
+struct RetimedBootstrap;
+
+impl SimBootstrap for RetimedBootstrap {
+    fn on_start(&self, sim: &mut impl Sim) {
+        switchy::time::simulator::set_step_multiplier(7);
+        sim.client("sleeper", async move {
+            time::sleep(Duration::from_millis(70)).await;
+            simvar_utils::cancel_simulation();
+            Ok(())
+        });
+    }
+}
+
+#[test_log::test]
+fn a_run_whose_clock_is_reconfigured_as_it_starts_still_reports_its_times() {
+    let (result, _) = run(&RetimedBootstrap, 1);
+    assert_success(&result);
+    assert!(result.run().steps > 0, "{result}");
+    assert!(result.run().sim_time_millis > 0, "{result}");
+}

@@ -477,8 +477,7 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
         }
 
         let outcome = if self.max_parallel == 0 {
-            Self::run_sequentially(&control, &bootstrap, runs, &results);
-            Ok(())
+            Self::run_sequentially(&control, &bootstrap, runs, &results)
         } else {
             Self::run_workers(&control, &bootstrap, runs, &results)
         };
@@ -499,7 +498,7 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
         bootstrap: &B,
         runs: Option<u64>,
         results: &Results,
-    ) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let simulation = Simulation::new(bootstrap);
         for run_number in 1.. {
             if runs.is_some_and(|runs| run_number > runs) {
@@ -516,13 +515,18 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
                 state.active += 1;
             }
 
-            let result = simulation.run(run_number, None, 1);
+            // A panic outside the run's own panic catching fails the simulation, never silently.
+            let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                simulation.run(run_number, None, 1)
+            }))
+            .map_err(|e| format!("run {run_number} panicked: {}", panic_message(&*e)))?;
             finish_run(control, runs, results, run_number, result);
 
             if END_SIM.load(Ordering::SeqCst) {
                 break;
             }
         }
+        Ok(())
     }
 
     /// Runs on up to `max_parallel` worker threads, started and retired as the fleet control
@@ -535,6 +539,7 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let run_index = Arc::new(AtomicU64::new(0));
         let mut threads = vec![];
+        let mut errors = vec![];
 
         let mut state = control.lock();
         loop {
@@ -552,26 +557,36 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
                 state.slots.insert(slot);
                 state.workers += 1;
                 log::debug!("starting worker {slot}");
-                threads.push(Self::spawn_worker(
-                    WorkerSlot {
-                        control: Arc::clone(control),
-                        slot,
-                        released: false,
-                    },
+                match Self::spawn_worker(
+                    Arc::clone(control),
+                    slot,
                     Arc::clone(bootstrap),
                     Arc::clone(&run_index),
                     runs,
                     Arc::clone(results),
-                ));
+                ) {
+                    Ok(thread) => threads.push(thread),
+                    Err(e) => {
+                        // The worker never started, so its bookkeeping is undone here. Running
+                        // on with fewer workers would hide whatever exhausted the threads (runs
+                        // that leak them, say), so the simulation ends with the error.
+                        state.slots.remove(&slot);
+                        state.workers -= 1;
+                        errors.push(format!("failed to start fleet worker {slot}: {e}"));
+                        drop(state);
+                        end_fleet();
+                        state = control.lock();
+                        break;
+                    }
+                }
             }
-            if state.workers == 0 && (ended || unclaimed == Some(0)) {
+            // Read again: a worker that failed to start ends the simulation above.
+            if state.workers == 0 && (END_SIM.load(Ordering::SeqCst) || unclaimed == Some(0)) {
                 break;
             }
             state = control.wait(state);
         }
         drop(state);
-
-        let mut errors = vec![];
 
         for (i, thread) in threads.into_iter().enumerate() {
             log::debug!("joining thread {i}...");
@@ -584,12 +599,11 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
                     log::debug!("thread {i} joined");
                 }
                 Err(e) => {
-                    let message = e
-                        .downcast_ref::<String>()
-                        .map(String::as_str)
-                        .or_else(|| e.downcast_ref::<&str>().copied())
-                        .unwrap_or("(not a string)");
+                    let message = panic_message(&*e);
+                    // A panic outside every run's panic catching ended this worker, and with
+                    // it the runs it would have made: the simulation fails, never silently.
                     log::error!("failed to join thread {i}: {message}");
+                    errors.push(format!("fleet worker {i} panicked: {message}"));
                 }
             }
         }
@@ -600,15 +614,24 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
         Ok(())
     }
 
+    /// Start the worker for `slot`, already counted in the fleet's state (which the caller
+    /// holds locked).
     fn spawn_worker(
-        worker: WorkerSlot,
+        control: Arc<FleetControl>,
+        slot: u64,
         bootstrap: Arc<B>,
         run_index: Arc<AtomicU64>,
         runs: Option<u64>,
         results: Results,
-    ) -> std::thread::JoinHandle<Result<(), String>> {
-        std::thread::spawn(move || {
-            let mut worker = worker;
+    ) -> std::io::Result<std::thread::JoinHandle<Result<(), String>>> {
+        std::thread::Builder::new().spawn(move || {
+            // Made on the worker, so a thread that never starts drops no slot: dropping one
+            // takes the fleet's lock, which the spawning thread holds.
+            let mut worker = WorkerSlot {
+                control,
+                slot,
+                released: false,
+            };
             let _ = thread_id();
             let thread_id = worker_thread_id();
             let slot = worker.slot;
@@ -659,6 +682,15 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
             }
         })
     }
+}
+
+/// A panic payload's message.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| payload.downcast_ref::<&str>().copied())
+        .unwrap_or("(not a string)")
 }
 
 /// Count a finished fleet run and keep its result (only a failure's, when the fleet is
@@ -1131,8 +1163,10 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             run_info(&props)
         ));
 
-        // The run's monotonic clock: its wall clock may jump backward (a fault).
-        let start = switchy::time::Instant::now();
+        // The run's monotonic clock: its wall clock may jump backward (a fault). A raw reading,
+        // not a `switchy::time::Instant`, whose comparisons panic once the run's clock is
+        // reconfigured (a bootstrap setting the step multiplier in `on_start`, say).
+        let start = switchy::time::instant_now();
         let real_start = Instant::now();
 
         self.bootstrap.on_start(&mut managed_sim);
@@ -1200,7 +1234,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         self.bootstrap.on_end(&mut managed_sim);
 
-        let real_time_millis = switchy::time::Instant::now()
+        let real_time_millis = switchy::time::instant_now()
             .saturating_duration_since(start)
             .as_millis();
         let sim_time = managed_sim.elapsed();
@@ -1535,8 +1569,9 @@ struct ManagedSim {
     config: SimConfig,
     hosts: Vec<Host>,
     clients: Vec<Client>,
-    /// When it started, on the run's monotonic clock (its wall clock may jump backward).
-    start: Option<switchy::time::Instant>,
+    /// When it started, on the run's monotonic clock (its wall clock may jump backward), read
+    /// raw for the reason `Simulation::run_once` gives.
+    start: Option<Instant>,
     /// Hosts to restart, and when, in the order their bounces were applied.
     restarts: Vec<(SystemTime, String)>,
 }
@@ -1615,11 +1650,11 @@ impl ManagedSim {
         let Some(start) = self.start else {
             return Duration::ZERO;
         };
-        switchy::time::Instant::now().saturating_duration_since(start)
+        switchy::time::instant_now().saturating_duration_since(start)
     }
 
     pub fn start(&mut self) {
-        self.start = Some(switchy::time::Instant::now());
+        self.start = Some(switchy::time::instant_now());
 
         for host in self.hosts.iter_mut().filter(|x| x.is_down()) {
             host.start();
