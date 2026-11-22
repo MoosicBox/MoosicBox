@@ -8,7 +8,7 @@ CI comparison is delegated to its existing artifact verifier (no new platform po
 import argparse
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 from types import SimpleNamespace
 
@@ -278,7 +278,7 @@ def verify_combined_scoreboard(root):
     commands = json.loads((root / "commands.json").read_text(encoding="utf-8"))
     matches = [(i, row) for i, row in enumerate(commands)
                if len(row.get("argv", [])) == 1 and
-               Path(row["argv"][0]).name in
+               PureWindowsPath(row["argv"][0]).name in
                ("moosicbox_opus_native_test_runner", "moosicbox_opus_native_test_runner.exe")]
     if len(matches) != 1:
         raise ValueError("missing unique unfiltered combined scoreboard command")
@@ -309,9 +309,64 @@ def verify_combined_scoreboard(root):
             or summary.get("scope") != "all_cases"
             or any(summary.get(k) is not True for k in ("success", "selected_cases_pass", "whole_corpus_pass"))):
         raise ValueError("combined scoreboard incomplete or failed corpus")
-    # Existing bundle/CI receipts bind native/reference oracles, not the
-    # combined executable. Fail closed rather than invent a receipt contract.
-    raise ValueError("missing combined scoreboard compiled-image/source receipt and independent schema-3 packet/corpus verification")
+    receipt_path = root / "scoreboard-build.json"
+    if not receipt_path.exists():
+        raise ValueError("missing combined scoreboard compiled-image/source receipt")
+    receipt = json.loads(receipt_path.read_bytes())
+    name = PureWindowsPath(command["argv"][0]).name
+    runner = "moosicbox_opus_native_test_runner"
+    build_argv = ["cargo", "build", "--locked", "--offline", "-j", "2", "-p", runner,
+                  "--bin", runner, "--message-format=json-render-diagnostics",
+                  "--no-default-features", "--features", ci.FEATURES, "--release"]
+    image = digest(local_path(root, name))
+    if (receipt.get("schema") != "moosicbox.opus.scoreboard-build.v1" or index < 1
+            or receipt.get("build_index") != index - 1 or commands[index-1].get("argv") != build_argv
+            or commands[index-1].get("exit_code") != 0 or commands[index-1].get("timed_out", False)
+            or receipt.get("sources") != ci.sources() or receipt.get("image_sha256") != image
+            or header.get("executable_sha256") != image):
+        raise ValueError("combined scoreboard build/source/image mismatch")
+    verify_scoreboard_packets(ci.ROOT / "packages/opus_native/test_vectors/frozen/corpus",
+                              inventory, cases, summary)
+
+
+def verify_scoreboard_packets(root, inventory, cases, summary):
+    corpus = hashlib.sha256((root / "inventory.json").read_bytes())
+    corpus.update((root / "provenance.json").read_bytes())
+    by_id = {case["id"]: case for case in cases}
+    for entry in sorted(inventory["cases"], key=lambda row: row["id"]):
+        case = by_id[entry["id"]]
+        path = local_path(root, entry["path"])
+        identity = hashlib.sha256()
+        if entry["kind"] == "sequence":
+            identity.update((path / "sequence.json").read_bytes())
+        packets = case.get("packets", [])
+        if (case.get("kind") != entry["kind"] or len(packets) != entry["packet_count"]
+                or case.get("different_common_samples") != 0 or case.get("unpaired_samples") != 0):
+            raise ValueError("combined case packet inventory or differences mismatch")
+        output = []
+        for i, packet in enumerate(packets):
+            folder = path if i == 0 else path / f"packet_{i:03}"
+            data = [(folder / file).read_bytes() for file in ("packet.bin", "expected.pcm", "meta.json")]
+            for item in data:
+                identity.update(len(item).to_bytes(8, "little"))
+                identity.update(item)
+            pcm = data[1]
+            samples = len(pcm) // 2
+            hashed = hashlib.sha256(pcm).hexdigest()
+            expected = dict(packet_index=i, status="pass", actual_samples=samples, expected_samples=samples,
+                            actual_pcm_sha256=hashed, length_equal=True, different_common_samples=0,
+                            unpaired_samples=0, max_absolute_error=0, first_difference=None)
+            if not samples or len(pcm) % 2 or any(k not in packet or type(packet[k]) is not type(v)
+                                                   or packet[k] != v for k, v in expected.items()):
+                raise ValueError(f"combined packet PCM mismatch: {entry['id']}:{i}")
+            output.append([i, "pass", samples, hashed])
+        actual = hashlib.sha256(json.dumps(output, separators=(",", ":")).encode()).hexdigest()
+        if case.get("fixture_sha256") != identity.hexdigest() or case.get("actual_pcm_sha256") != actual:
+            raise ValueError("combined fixture or output identity mismatch")
+        label = entry["id"].encode()
+        corpus.update(len(label).to_bytes(8, "little") + label + identity.hexdigest().encode())
+    if summary.get("corpus_sha256") != corpus.hexdigest():
+        raise ValueError("combined corpus identity mismatch")
 
 
 def aggregate(bundle_path):

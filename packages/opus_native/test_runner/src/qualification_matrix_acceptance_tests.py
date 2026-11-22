@@ -136,6 +136,16 @@ class AcceptanceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing unique"):
                 acceptance.verify_combined_scoreboard(root)
 
+    def test_forged_packet_evidence_rejected_even_if_case_claims_pass(self):
+        root = acceptance.ci.ROOT / "packages/opus_native/test_vectors/frozen/corpus"
+        inventory = json.loads((root / "inventory.json").read_bytes())
+        entry = inventory["cases"][0]
+        case = dict(id=entry["id"], kind=entry["kind"], status="pass", exercised=True,
+                    different_common_samples=0, unpaired_samples=0,
+                    packets=[dict(status="pass", actual_pcm_sha256="0" * 64)])
+        with self.assertRaisesRegex(ValueError, "packet PCM mismatch"):
+            acceptance.verify_scoreboard_packets(root, {"cases": [entry]}, [case], {})
+
     def test_full_suite_accepts_all_discovered_tests_without_per_test_processes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

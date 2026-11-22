@@ -690,13 +690,24 @@ def run(args):
                 timeout=600,
             )
             native_tests(execution, args.profile, "moosicbox_opus_native_test_runner")
+            scoreboard_build = len(execution.commands)
             scoreboard = execution.build(
                 "moosicbox_opus_native_test_runner",
                 "moosicbox_opus_native_test_runner",
                 args.profile,
                 binary=True,
             )
+            image = digest(scoreboard)
+            if sources() != before:
+                raise RuntimeError("source changed during scoreboard build")
             execution.run([scoreboard], timeout=1800)
+            if digest(scoreboard) != image:
+                raise RuntimeError("scoreboard changed during execution")
+            write_json(output / "scoreboard-build.json", {
+                "schema": "moosicbox.opus.scoreboard-build.v1",
+                "sources": before, "image_sha256": image,
+                "build_index": scoreboard_build,
+            })
             strict_matrix(execution, native, reference)
             report["quality_sha256"] = digest(output / "quality.json")
         else:
