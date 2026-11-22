@@ -128,6 +128,12 @@ pub fn vars() -> BTreeMap<String, String> {
     PROVIDER.vars()
 }
 
+/// Get an environment variable as an `OsString` (see [`std::env::var_os`])
+#[must_use]
+pub fn var_os(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

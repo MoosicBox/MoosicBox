@@ -215,7 +215,9 @@ pub trait EnvProvider: Send + Sync {
 #[allow(unused)]
 macro_rules! impl_env {
     ($module:ident $(,)?) => {
-        pub use $module::{var, var_exists, var_or, var_parse, var_parse_opt, var_parse_or, vars};
+        pub use $module::{
+            var, var_exists, var_or, var_os, var_parse, var_parse_opt, var_parse_or, vars,
+        };
     };
 }
 

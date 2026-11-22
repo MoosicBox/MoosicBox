@@ -17,8 +17,9 @@ examples = true
 group = "switchy"
 
 [dependencies]
-log       = { workspace = true }
-thiserror = { workspace = true }
+log                = { workspace = true }
+switchy_simulation = { workspace = true, optional = true }
+thiserror          = { workspace = true }
 
 [dev-dependencies]
 serial_test = { workspace = true }
@@ -29,5 +30,5 @@ default = ["simulator", "std"]
 
 fail-on-warnings = []
 
-simulator = []
+simulator = ["dep:switchy_simulation"]
 std       = []

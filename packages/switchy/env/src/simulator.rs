@@ -189,7 +189,54 @@ impl EnvProvider for SimulatorEnv {
     }
 }
 
-static PROVIDER: std::sync::LazyLock<SimulatorEnv> = std::sync::LazyLock::new(SimulatorEnv::new);
+static PROVIDER: std::sync::LazyLock<Arc<SimulatorEnv>> =
+    std::sync::LazyLock::new(|| Arc::new(SimulatorEnv::new()));
+
+/// The current simulation run's own environment, when [`isolate`] gave it one.
+struct Isolated(RwLock<Option<Arc<SimulatorEnv>>>);
+
+/// The provider this thread reads: its simulation run's isolated environment if the run has
+/// one, the process-wide simulated environment otherwise.
+fn provider() -> Arc<SimulatorEnv> {
+    switchy_simulation::state_with(|| Isolated(RwLock::new(None)))
+        .0
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+        .unwrap_or_else(|| Arc::clone(&PROVIDER))
+}
+
+/// Give the current simulation run (its `switchy_simulation` context) an environment of its
+/// own, holding exactly `vars`.
+///
+/// Every read and write on threads of that run then sees only
+/// these variables, never the host's, so a run does not depend on where it is executed and
+/// concurrent runs do not see each other's changes.
+pub fn isolate(vars: impl IntoIterator<Item = (String, String)>) {
+    let env = SimulatorEnv {
+        vars: Arc::new(RwLock::new(vars.into_iter().collect())),
+    };
+    *switchy_simulation::state_with(|| Isolated(RwLock::new(None)))
+        .0
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::new(env));
+}
+
+/// Whether the current simulation run has an environment of its own (see [`isolate`]).
+#[must_use]
+pub fn is_isolated() -> bool {
+    switchy_simulation::state_with(|| Isolated(RwLock::new(None)))
+        .0
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .is_some()
+}
+
+/// Get an environment variable as an `OsString`, as [`std::env::var_os`] does
+#[must_use]
+pub fn var_os(name: &str) -> Option<std::ffi::OsString> {
+    provider().var(name).ok().map(Into::into)
+}
 
 /// Get an environment variable as a string
 ///
@@ -201,13 +248,13 @@ static PROVIDER: std::sync::LazyLock<SimulatorEnv> = std::sync::LazyLock::new(Si
 ///
 /// * If the internal `RwLock` is poisoned
 pub fn var(name: &str) -> Result<String> {
-    PROVIDER.var(name)
+    provider().var(name)
 }
 
 /// Get an environment variable with a default value
 #[must_use]
 pub fn var_or(name: &str, default: &str) -> String {
-    PROVIDER.var_or(name, default)
+    provider().var_or(name, default)
 }
 
 /// Get an environment variable parsed as a specific type
@@ -221,7 +268,7 @@ where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
 {
-    PROVIDER.var_parse(name)
+    provider().var_parse(name)
 }
 
 /// Get an environment variable parsed with a default value
@@ -231,7 +278,7 @@ where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
 {
-    PROVIDER.var_parse_or(name, default)
+    provider().var_parse_or(name, default)
 }
 
 /// Get an optional environment variable parsed as a specific type
@@ -250,13 +297,13 @@ where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
 {
-    PROVIDER.var_parse_opt(name)
+    provider().var_parse_opt(name)
 }
 
 /// Check if an environment variable exists
 #[must_use]
 pub fn var_exists(name: &str) -> bool {
-    PROVIDER.var_exists(name)
+    provider().var_exists(name)
 }
 
 /// Get all environment variables
@@ -266,7 +313,7 @@ pub fn var_exists(name: &str) -> bool {
 /// * If the internal `RwLock` is poisoned
 #[must_use]
 pub fn vars() -> BTreeMap<String, String> {
-    PROVIDER.vars()
+    provider().vars()
 }
 
 /// Set a variable for testing (simulator only)
@@ -275,7 +322,7 @@ pub fn vars() -> BTreeMap<String, String> {
 ///
 /// * If the internal `RwLock` is poisoned
 pub fn set_var(name: &str, value: &str) {
-    PROVIDER.set_var(name, value);
+    provider().set_var(name, value);
 }
 
 /// Remove a variable (simulator only)
@@ -284,7 +331,7 @@ pub fn set_var(name: &str, value: &str) {
 ///
 /// * If the internal `RwLock` is poisoned
 pub fn remove_var(name: &str) {
-    PROVIDER.remove_var(name);
+    provider().remove_var(name);
 }
 
 /// Clear all variables (simulator only)
@@ -293,7 +340,7 @@ pub fn remove_var(name: &str) {
 ///
 /// * If the internal `RwLock` is poisoned
 pub fn clear() {
-    PROVIDER.clear();
+    provider().clear();
 }
 
 /// Reset to defaults (simulator only)
@@ -302,7 +349,7 @@ pub fn clear() {
 ///
 /// * If the internal `RwLock` is poisoned
 pub fn reset() {
-    PROVIDER.reset();
+    provider().reset();
 }
 
 #[cfg(test)]
@@ -813,5 +860,28 @@ mod tests {
         unsafe {
             std::env::remove_var("REAL_VAR_FOR_RESET_TEST");
         }
+    }
+
+    #[test_log::test]
+    fn isolated_runs_see_only_their_own_variables() {
+        let first = switchy_simulation::Context::new(1);
+        let second = switchy_simulation::Context::new(2);
+        switchy_simulation::with_context(Arc::clone(&first), || {
+            assert!(!is_isolated());
+            isolate([("SHELL".to_string(), "/bin/sim".to_string())]);
+            assert!(is_isolated());
+            assert_eq!(var("SHELL").unwrap(), "/bin/sim");
+            assert!(var("PATH").is_err());
+            set_var("ONLY_FIRST", "1");
+            assert_eq!(var_os("ONLY_FIRST"), Some("1".into()));
+            assert_eq!(vars().len(), 2);
+        });
+        switchy_simulation::with_context(second, || {
+            assert!(!is_isolated());
+            assert!(var("ONLY_FIRST").is_err());
+        });
+        switchy_simulation::with_context(first, || {
+            assert_eq!(var("ONLY_FIRST").unwrap(), "1");
+        });
     }
 }
