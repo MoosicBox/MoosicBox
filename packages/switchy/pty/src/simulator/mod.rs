@@ -613,6 +613,28 @@ pub fn register_program(name: &str, program: impl Fn(&mut Process) -> i32 + Send
         .insert(name.to_owned(), Arc::new(program));
 }
 
+/// Observe what the run's kernel ended with (see [`switchy_simulation::digest`]): every
+/// signal delivered, every byte each terminal and pipe was written, and the processes left.
+fn observe_run_end() {
+    let Some(kernel) = switchy_simulation::existing_state::<Kernel>() else {
+        return;
+    };
+    let state = lock(&kernel.state);
+    switchy_simulation::observe_debug("pty.signals", "every signal delivered", &state.signal_log);
+    for (id, terminal) in &state.terminals {
+        switchy_simulation::observe(
+            "pty.terminal",
+            &format!("{} (terminal {id}) written", terminal.name),
+            &terminal.written,
+        );
+    }
+    for (id, pipe) in &state.pipes {
+        switchy_simulation::observe("pty.pipe", &format!("pipe {id} written"), &pipe.written);
+    }
+    drop(state);
+    switchy_simulation::observe_debug("pty.processes", "processes left", &kernel.snapshot());
+}
+
 /// A read-only view of the current run's kernel.
 #[must_use]
 pub fn snapshot() -> KernelSnapshot {
@@ -874,6 +896,7 @@ impl Kernel {
     }
 
     fn bare(config: Config) -> Self {
+        switchy_simulation::digest::on_run_end("switchy_pty", observe_run_end);
         let rng = switchy_simulation::stream("switchy_pty");
         let first = 100 + u32::try_from(lock(&rng).below(900)).unwrap_or(0);
         Self {
@@ -1265,6 +1288,11 @@ impl Kernel {
         let Some(process) = state.processes.get_mut(&pid) else {
             return;
         };
+        switchy_simulation::observe_debug(
+            "pty.exit",
+            &format!("pid {pid} (serial {})", process.serial),
+            &exit,
+        );
         process.state = ProcessState::Zombie(exit);
         let streams = process.streams;
         let controlling = process.controlling;
@@ -1582,6 +1610,14 @@ impl Kernel {
         }
         let pid = self.allocate_pid(&mut state);
         let serial = Self::new_id(&mut state);
+        switchy_simulation::observe(
+            "pty.spawn",
+            &format!(
+                "pid {pid} (serial {serial}) by {:?}: {argv:?}",
+                parent.map(|(pid, _, _)| pid)
+            ),
+            b"",
+        );
         let windows = state.config.personality.is_windows();
         let session_serial = match parent {
             // A new session (Unix) is its own; a Windows process stays in its parent's job.

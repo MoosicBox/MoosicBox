@@ -1926,8 +1926,13 @@ pub(crate) fn touch(object: Object, write: bool) {
 /// A unique key for a synchronization object's waits, such as [`WaitKey::Io`].
 #[must_use]
 pub fn new_key() -> u64 {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static NEXT: AtomicU64 = AtomicU64::new(1);
+    use std::sync::{
+        LazyLock,
+        atomic::{AtomicU64, Ordering},
+    };
+    // Process-wide, so started elsewhere when perturbed (see `switchy_simulation::counter_start`).
+    static NEXT: LazyLock<AtomicU64> =
+        LazyLock::new(|| AtomicU64::new(switchy_simulation::counter_start()));
     NEXT.fetch_add(1, Ordering::Relaxed)
 }
 

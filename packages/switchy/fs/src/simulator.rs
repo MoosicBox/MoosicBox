@@ -394,7 +394,16 @@ struct RunFilesystem(Arc<Filesystem>);
 
 impl Default for RunFilesystem {
     fn default() -> Self {
+        switchy_simulation::digest::on_run_end("switchy_fs", observe_run_end);
         Self(Arc::new(Filesystem::new()))
+    }
+}
+
+/// Observe the run's filesystem as it ended (see [`switchy_simulation::digest`]): every file's
+/// and directory's contents, metadata and times, what is durable, and open handles.
+fn observe_run_end() {
+    if let Some(run) = switchy_simulation::existing_state::<RunFilesystem>() {
+        switchy_simulation::observe_debug("fs", "the run's filesystem", &*run.0.vfs());
     }
 }
 

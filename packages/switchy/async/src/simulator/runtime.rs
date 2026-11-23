@@ -109,8 +109,11 @@ type Registry = Arc<Mutex<BTreeMap<u64, Weak<Task>>>>;
 /// Tasks woken late (see `faults`), each with the steps it still waits, in the order woken.
 type Late = Arc<Mutex<Vec<(u64, Arc<Task>)>>>;
 
-static RUNTIME_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
-static TASK_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
+// Process-wide, so started elsewhere when perturbed (see `switchy_simulation::counter_start`).
+static RUNTIME_ID: LazyLock<AtomicU64> =
+    LazyLock::new(|| AtomicU64::new(switchy_simulation::counter_start()));
+static TASK_ID: LazyLock<AtomicU64> =
+    LazyLock::new(|| AtomicU64::new(switchy_simulation::counter_start()));
 
 /// A handle to a simulator runtime that provides task spawning and execution capabilities.
 #[derive(Debug, Clone)]

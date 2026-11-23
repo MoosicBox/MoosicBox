@@ -182,7 +182,14 @@ pub mod __private {
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
-static THREAD_ID_COUNTER: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
+// Process-wide, so started elsewhere when perturbed (see `switchy_simulation::counter_start`).
+static THREAD_ID_COUNTER: LazyLock<AtomicU64> = LazyLock::new(|| {
+    #[cfg(feature = "simulator")]
+    let start = switchy_simulation::counter_start();
+    #[cfg(not(feature = "simulator"))]
+    let start = 1;
+    AtomicU64::new(start)
+});
 
 thread_local! {
     static THREAD_ID: RefCell<u64> = RefCell::new(THREAD_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst));

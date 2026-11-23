@@ -35,8 +35,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+pub mod digest;
 mod rng;
 
+pub use digest::{Digest, observe, observe_debug};
 pub use rng::Rng;
 
 use std::{
@@ -52,7 +54,23 @@ use std::{
 
 type Slot = Arc<dyn Any + Send + Sync>;
 
-static NEXT_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_CONTEXT_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(counter_start()));
+
+/// Where a process-wide counter of the simulators (context, task and lock ids, ...) starts:
+/// `1`, or with `SIMULATOR_PERTURB` set, somewhere random.
+///
+/// No run may depend on such counters, whose values depend on what ran before it in the
+/// process. Starting them elsewhere makes a run that does observe something else, which a
+/// replay in a fresh, perturbed process (simvar's `SIMULATOR_VERIFY_DETERMINISM=process`)
+/// then reports.
+#[must_use]
+pub fn counter_start() -> u64 {
+    if std::env::var_os("SIMULATOR_PERTURB").is_some_and(|v| !v.is_empty() && v != "0") {
+        1 + (entropy() & ((1 << 40) - 1))
+    } else {
+        1
+    }
+}
 
 /// The state of one simulation run, shared by every thread taking part in it.
 ///
@@ -151,6 +169,18 @@ impl Context {
             .unwrap_or_else(|_| unreachable!("slots are keyed by their type"))
     }
 
+    /// This run's value of `T`, if something already made it; never makes one.
+    #[must_use]
+    pub fn existing_state<T: Any + Send + Sync>(&self) -> Option<Arc<T>> {
+        lock(&self.slots)
+            .get(&TypeId::of::<T>())
+            .map(Arc::clone)
+            .map(|slot| {
+                slot.downcast::<T>()
+                    .unwrap_or_else(|_| unreachable!("slots are keyed by their type"))
+            })
+    }
+
     /// Drop every simulator's state, so each starts fresh on next use. The seed is kept and
     /// named streams restart from it.
     pub fn clear(&self) {
@@ -216,6 +246,12 @@ pub fn state<T: Any + Send + Sync + Default>() -> Arc<T> {
 #[must_use]
 pub fn state_with<T: Any + Send + Sync>(init: impl FnOnce() -> T) -> Arc<T> {
     current().state_with(init)
+}
+
+/// This run's value of `T`, if something already made it; see [`Context::existing_state`].
+#[must_use]
+pub fn existing_state<T: Any + Send + Sync>() -> Option<Arc<T>> {
+    current().existing_state::<T>()
 }
 
 /// The current run's named RNG stream; see [`Context::stream`].
