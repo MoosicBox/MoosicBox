@@ -18522,9 +18522,12 @@ dependencies = [
  "cargo_metadata 0.23.1",
  "clap",
  "pretty_assertions",
+ "proc-macro2",
+ "quote",
  "semver",
  "serde",
  "serde_json",
+ "syn 3.0.9",
  "toml 1.1.8+spec-1.1.0",
 ]
 

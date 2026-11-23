@@ -23,12 +23,46 @@ struct Args {
     /// list does not cover, to accept them as they are, instead of failing on them.
     #[arg(long, value_name = "REASON")]
     baseline: Option<String>,
+    /// Scan every external crate by the shared rules instead, as evidence for its audit: one
+    /// line per crate with its finding count (and the first few with `--verbose`).
+    #[arg(long)]
+    scan_external: bool,
+    /// With `--scan-external`, show each crate's first findings.
+    #[arg(long)]
+    verbose: bool,
 }
 
 fn main() -> ExitCode {
     let args = Args::parse();
     let mut passed = true;
     let mut baseline = std::collections::BTreeSet::new();
+    if args.scan_external {
+        let mut seen = std::collections::BTreeSet::new();
+        for package in &args.packages {
+            let scanned = switchy_cargo::Check::with_workspace_config(&args.manifest_path, package)
+                .and_then(|check| check.scan_external());
+            match scanned {
+                Ok(crates) => {
+                    for (krate, findings) in crates {
+                        if !seen.insert((krate.name.clone(), krate.version.clone())) {
+                            continue;
+                        }
+                        println!("{} {} {}", findings.len(), krate.name, krate.version);
+                        if args.verbose {
+                            for finding in findings.iter().take(5) {
+                                println!("    {finding}");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{package}: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+        return ExitCode::SUCCESS;
+    }
     for package in &args.packages {
         let report = switchy_cargo::Check::with_workspace_config(&args.manifest_path, package)
             .and_then(|check| check.run());

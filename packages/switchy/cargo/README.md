@@ -11,18 +11,28 @@ the host) rather than listed by hand.
 ## Local crates
 
 Every local crate in the graph (the workspace's and other path dependencies; proc macros
-excepted) is scanned line by line. A line is reported when it:
+excepted) is parsed (`syn`) from its roots, following `mod` declarations as rustc does
+(`#[path]` and modules declared inside macros included), so the scan reads exactly the files
+the crate compiles. Code whose `#[cfg]` is false for a simulation build is skipped: `test`,
+and features the crate does not have enabled in the simulation's build. A `cfg` it cannot
+decide (the operating system, `debug_assertions`) is scanned on both sides.
 
-- uses a primitive no seed controls (std threads, locks, atomics, clocks, files, environment,
+Every path is resolved before it is judged (`use` groups, aliases, globs, `self`/`super`/
+`crate`, re-exports through the crate's own modules), so `use std::sync::Mutex as Lock;` or a
+`pub use` elsewhere cannot hide a primitive. Macro invocations are scanned as tokens. It
+reports:
+
+- a primitive no seed controls (std threads, locks, atomics, clocks, files, environment,
   process id; tokio's runtime, `spawn`, `time`, `select!` and `watch`; `rand`, `new_v4`,
-  `HashMap`, `HashSet`, ordering by address) other than through a `switchy_` crate;
-- imports one in a group (`use std::{fs, sync::{Arc, Mutex}};`);
-- declares process-wide mutable state (a `static` lock, atomic or lazy value);
-- chooses code by operating system outside the files allowed to.
+  `HashMap`, `HashSet`, ordering by address) reached other than through a `switchy_` crate,
+  once per import;
+- process-wide mutable state (a `static` lock, atomic or lazy value, and `thread_local!`);
+- code chosen by operating system outside the files allowed to.
 
-Test code is skipped: `#[cfg(test)]` items, the modules they load, and `tests.rs` /
-`*_tests.rs`. A line that uses the std version on purpose says why:
-`// simulation-safe: <reason>`.
+A line that uses the std version on purpose says why: `// simulation-safe: <reason>` (on it
+or the line above). `// native-only: begin` ... `// native-only: end` marks native-only lines
+the `cfg`s do not. `SWITCHY_CARGO_SHOW_UNREACHED=1` lists the source files no `mod` reaches
+(tests, other platforms, dead files).
 
 A crate states what simulations run of it in its manifest; without the table it is scanned
 whole, so a crate a simulation starts linking is checked from the start:
@@ -61,6 +71,11 @@ reason = "new_v4 reads OS randomness; the shared rules forbid it"
 
 `--baseline REASON` prints `unaudited` entries, pinned to exact versions, for the crates the
 list does not cover, to accept them as they are and audit them later.
+
+`--scan-external` scans every external crate by the shared rules instead, with the features
+the simulation enables, and prints each one's finding count (`--verbose` shows the first
+few): evidence for an audit, not a verdict, since the shared rules do not know a crate's own
+controlled paths.
 
 ## Running it
 

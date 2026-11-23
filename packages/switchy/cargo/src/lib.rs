@@ -5,7 +5,7 @@
 //! switchy crates). [`Check`] checks that for everything the simulation links, found from its
 //! dependency graph rather than listed by hand:
 //!
-//! * **Local crates** (the workspace's, and other path dependencies) are scanned line by line
+//! * **Local crates** (the workspace's, and other path dependencies) are parsed and scanned
 //!   ([`scan`]), by the rules in each crate's manifest ([`manifest`]): which files run in
 //!   simulations, which are native backends or the controlled versions themselves, and whether
 //!   the crate runs inside a run at all. A crate without rules is scanned whole.
@@ -122,7 +122,7 @@ impl Check {
                 Ok(rules) if !rules.runs => {
                     CrateOutcome::NotRun(rules.reason.unwrap_or_default())
                 }
-                Ok(rules) => match scan::scan(&src, &rules, &forbidden) {
+                Ok(rules) => match scan::scan(&src, &rules, &forbidden, &krate.features) {
                     Ok(findings) => CrateOutcome::Scanned(findings),
                     Err(e) => CrateOutcome::BadRules(format!("cannot read src/: {e}")),
                 },
@@ -137,6 +137,45 @@ impl Check {
             }
         }
         Ok(report)
+    }
+}
+
+impl Check {
+    /// Scan every external crate the simulation links by the shared rules (as if it had no
+    /// rules of its own), as evidence for its audit: a crate whose compiled code reaches no
+    /// clock, randomness, thread, file, environment or process-wide state is a candidate for
+    /// `pure`.
+    ///
+    /// # Errors
+    ///
+    /// * If the dependency graph cannot be resolved
+    pub fn scan_external(&self) -> Result<Vec<(graph::ExternalCrate, Vec<Finding>)>, String> {
+        let graph = graph::resolve(&self.manifest_path, &self.package)?;
+        let forbidden: Vec<String> = scan::FORBIDDEN
+            .iter()
+            .map(ToString::to_string)
+            .chain(self.config.forbid.iter().cloned())
+            .collect();
+        Ok(graph
+            .external
+            .into_iter()
+            .map(|krate| {
+                let findings = scan::scan(
+                    &krate.dir.join("src"),
+                    &Rules::default(),
+                    &forbidden,
+                    &krate.features,
+                )
+                .unwrap_or_else(|e| {
+                    vec![Finding {
+                        file: String::new(),
+                        line: 0,
+                        what: format!("cannot read its sources: {e}"),
+                    }]
+                });
+                (krate, findings)
+            })
+            .collect())
     }
 }
 

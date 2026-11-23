@@ -20,6 +20,8 @@ pub struct LocalCrate {
     pub dir: PathBuf,
     /// Its manifest's `[package.metadata]`.
     pub metadata: serde_json::Value,
+    /// Its features enabled in the simulation's build.
+    pub features: std::collections::BTreeSet<String>,
 }
 
 /// A crate from a registry or git repository that a simulation links.
@@ -31,6 +33,10 @@ pub struct ExternalCrate {
     pub version: semver::Version,
     /// Where it comes from.
     pub source: String,
+    /// Its directory (its sources are under `src/`, or wherever its manifest says).
+    pub dir: PathBuf,
+    /// Its features enabled in the simulation's build.
+    pub features: BTreeSet<String>,
 }
 
 /// Everything a simulation links.
@@ -118,6 +124,7 @@ pub fn resolve(manifest_path: &Path, root: &str) -> Result<Graph, String> {
         }
         match &package.source {
             None => graph.local.push(LocalCrate {
+                features: nodes[id].features.iter().map(ToString::to_string).collect(),
                 name: package.name.to_string(),
                 dir: package
                     .manifest_path
@@ -129,6 +136,11 @@ pub fn resolve(manifest_path: &Path, root: &str) -> Result<Graph, String> {
                 name: package.name.to_string(),
                 version: package.version.clone(),
                 source: source.repr.clone(),
+                dir: package
+                    .manifest_path
+                    .parent()
+                    .map_or_else(PathBuf::new, |dir| dir.as_std_path().to_path_buf()),
+                features: nodes[id].features.iter().map(ToString::to_string).collect(),
             }),
         }
     }

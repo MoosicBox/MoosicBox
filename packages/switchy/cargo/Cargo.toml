@@ -16,9 +16,13 @@ examples = false
 [dependencies]
 cargo_metadata = { workspace = true }
 clap           = { workspace = true }
+# Line numbers of findings.
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+quote       = { workspace = true }
 semver         = { workspace = true, features = ["std"] }
 serde          = { workspace = true }
 serde_json     = { workspace = true }
+syn            = { workspace = true, features = ["full", "parsing", "printing", "visit"] }
 toml           = { workspace = true }
 
 [dev-dependencies]
