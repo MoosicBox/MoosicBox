@@ -151,7 +151,9 @@ impl<T> fmt::Debug for Receiver<T> {
 
 impl<T> Sender<T> {
     fn inner(&self) -> &Inner<T> {
-        self.inner.as_deref().expect("the sender is used until sent")
+        self.inner
+            .as_deref()
+            .expect("the sender is used until sent")
     }
 
     /// Sends `value`, consuming the sender.

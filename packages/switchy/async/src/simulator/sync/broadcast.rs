@@ -624,7 +624,11 @@ impl<T: Clone> Future for Recv<'_, T> {
 impl<T> Recv<'_, T> {
     fn leave(&mut self) {
         if self.waiter.is_some() {
-            self.receiver.shared.state().waiters.remove(self.waiter.take());
+            self.receiver
+                .shared
+                .state()
+                .waiters
+                .remove(self.waiter.take());
         }
     }
 }

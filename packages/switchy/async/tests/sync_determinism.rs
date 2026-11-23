@@ -341,7 +341,10 @@ fn spurious_pendings_reach_the_primitives_without_changing_results() {
         for probability in [0.2, 1.0] {
             let run = spurious_run(seed, probability);
             assert_eq!(run.0, expected, "seed {seed} at {probability}");
-            assert!(run.1 > 0 && run.2 > 0, "seed {seed} at {probability}: {run:?}");
+            assert!(
+                run.1 > 0 && run.2 > 0,
+                "seed {seed} at {probability}: {run:?}"
+            );
             assert_eq!(spurious_run(seed, probability), run, "seed {seed}");
         }
     }

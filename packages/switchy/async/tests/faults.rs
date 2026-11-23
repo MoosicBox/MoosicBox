@@ -20,8 +20,8 @@ use std::{
 
 use switchy_async::{
     simulator::{
-        FaultCounts, LATE_WAKEUPS_STREAM, SPURIOUS_PENDING_STREAM, fault_counts,
-        runtime::Runtime, set_late_wakeups, set_spurious_pending, set_yield_probability,
+        FaultCounts, LATE_WAKEUPS_STREAM, SPURIOUS_PENDING_STREAM, fault_counts, runtime::Runtime,
+        set_late_wakeups, set_spurious_pending, set_yield_probability,
     },
     sync::{Barrier, mpmc, mpsc, watch},
     task,
@@ -59,7 +59,10 @@ fn drive(runtime: &Runtime) -> usize {
 /// value of the same stream of a fresh run with the same seed.
 fn untouched(stream: &str) -> bool {
     let seed = switchy_simulation::seed();
-    let next = switchy_simulation::stream(stream).lock().unwrap().next_u64();
+    let next = switchy_simulation::stream(stream)
+        .lock()
+        .unwrap()
+        .next_u64();
     let fresh = switchy_simulation::Context::new(seed)
         .stream(stream)
         .lock()
@@ -119,7 +122,11 @@ fn late_wakeups_fire_at_the_configured_rate_and_replay() {
             "seed {seed}: {counts:?}"
         );
         assert_eq!(counts.spurious_pending_draws, 0);
-        assert_eq!(late_run(seed, Some(0.2)), (order.clone(), counts), "seed {seed}");
+        assert_eq!(
+            late_run(seed, Some(0.2)),
+            (order.clone(), counts),
+            "seed {seed}"
+        );
         // Late wakeups reorder the tasks' polls.
         assert_ne!(late_run(seed, None).0, order, "seed {seed}");
     }
@@ -185,7 +192,8 @@ async fn workload(timed: bool) -> (u64, u64, usize) {
 
     let mut producers = Vec::new();
     for p in 0..3_u64 {
-        let (flume_tx, bounded_tx, mpsc_tx) = (flume_tx.clone(), bounded_tx.clone(), mpsc_tx.clone());
+        let (flume_tx, bounded_tx, mpsc_tx) =
+            (flume_tx.clone(), bounded_tx.clone(), mpsc_tx.clone());
         let (barrier, leaders) = (Arc::clone(&barrier), Arc::clone(&leaders));
         producers.push(task::spawn(async move {
             let mut interval = switchy_async::time::interval(Duration::from_millis(1));
@@ -397,7 +405,11 @@ fn a_late_task_counts_until_it_finishes_and_shutdown_drops_it() {
         for _ in 0..20 {
             runtime.tick();
         }
-        assert_eq!(polls.load(Ordering::SeqCst), polled, "a shut-down runtime ran a task");
+        assert_eq!(
+            polls.load(Ordering::SeqCst),
+            polled,
+            "a shut-down runtime ran a task"
+        );
         let other = Runtime::new();
         assert!(other.block_on(forever).is_err());
         other.wait().unwrap();
@@ -459,7 +471,11 @@ mod threads {
             for workers in [1, 3] {
                 let unset = threaded(seed, workers, None);
                 assert!(!unset.2);
-                assert_eq!(threaded(seed, workers, Some((0.0, 0.0))), unset, "seed {seed}");
+                assert_eq!(
+                    threaded(seed, workers, Some((0.0, 0.0))),
+                    unset,
+                    "seed {seed}"
+                );
             }
         }
     }

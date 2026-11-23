@@ -630,7 +630,10 @@ fn a_run_that_depends_on_its_process_history_diverges_at_that_observation() {
     let again = replayed(outcome(&HistoryBootstrap, 1));
     let error = crate::divergence(&first, &again).expect("the runs observed differently");
     assert!(error.contains("non-deterministic simulation"), "{error}");
-    assert!(error.contains("test: 1 observations / 1 (same count"), "{error}");
+    assert!(
+        error.contains("test: 1 observations / 1 (same count"),
+        "{error}"
+    );
     assert!(error.contains("[test] runs before"), "{error}");
 }
 

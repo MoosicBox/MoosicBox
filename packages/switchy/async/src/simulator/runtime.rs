@@ -773,17 +773,16 @@ impl Runtime {
         }
         let pollers: Vec<String> = {
             let registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
-            let snapshot = switchy_thread::simulator::try_scheduler()
-                .map(|scheduler| scheduler.snapshot());
+            let snapshot =
+                switchy_thread::simulator::try_scheduler().map(|scheduler| scheduler.snapshot());
             registry
                 .values()
                 .filter_map(Weak::upgrade)
                 .filter(|task| task.polled_elsewhere())
                 .filter_map(|task| *task.poller.lock().unwrap_or_else(PoisonError::into_inner))
                 .map(|(_, index)| {
-                    let thread = index.and_then(|index| {
-                        snapshot.as_ref().and_then(|s| s.threads.get(index))
-                    });
+                    let thread = index
+                        .and_then(|index| snapshot.as_ref().and_then(|s| s.threads.get(index)));
                     thread.map_or_else(
                         || "a thread outside the run".to_string(),
                         |t| format!("#{} {} ({:?} at {:?})", t.index, t.name, t.state, t.op),
@@ -1447,8 +1446,8 @@ impl<'a> Polling<'a> {
     fn start(task: &'a Task) -> Self {
         task.polling.store(true, Ordering::SeqCst);
         #[cfg(feature = "thread-simulator")]
-        let index = switchy_thread::simulator::try_scheduler()
-            .and_then(|scheduler| scheduler.try_me());
+        let index =
+            switchy_thread::simulator::try_scheduler().and_then(|scheduler| scheduler.try_me());
         #[cfg(not(feature = "thread-simulator"))]
         let index = None;
         let outer = task.set_poller(Some((std::thread::current().id(), index)));

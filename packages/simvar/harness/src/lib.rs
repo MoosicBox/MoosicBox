@@ -534,10 +534,9 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
             }
 
             // A panic outside the run's own panic catching fails the simulation, never silently.
-            let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                simulation.run(run_number, None, 1)
-            }))
-            .map_err(|e| format!("run {run_number} panicked: {}", panic_message(&*e)))?;
+            let result =
+                std::panic::catch_unwind(AssertUnwindSafe(|| simulation.run(run_number, None, 1)))
+                    .map_err(|e| format!("run {run_number} panicked: {}", panic_message(&*e)))?;
             finish_run(control, runs, results, run_number, result);
 
             if END_SIM.load(Ordering::SeqCst) {
@@ -825,6 +824,11 @@ impl RunState {
 struct CurrentRun(Option<Arc<RunState>>);
 
 fn current_run_state() -> Option<Arc<RunState>> {
+    // The panic hook calls this from any thread, including ones no run knows (the harness's
+    // own, after its runs ended), where reaching for a context would panic inside the hook.
+    if !switchy::simulation::context_available() {
+        return None;
+    }
     switchy::simulation::state_with(|| CurrentRun(None))
         .0
         .clone()
@@ -1502,9 +1506,7 @@ fn verify_mode() -> Verify {
 /// Whether runs record their digest: when they are verified, or report it to the process
 /// verifying them (`SIMULATOR_DIGEST_OUT`). Tests always record.
 fn records_digest() -> bool {
-    cfg!(test)
-        || verify_mode() != Verify::Off
-        || std::env::var_os("SIMULATOR_DIGEST_OUT").is_some()
+    cfg!(test) || verify_mode() != Verify::Off || std::env::var_os("SIMULATOR_DIGEST_OUT").is_some()
 }
 
 /// What a replay of a run observed.

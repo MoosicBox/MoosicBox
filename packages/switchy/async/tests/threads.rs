@@ -281,8 +281,11 @@ fn blocking_sync_calls_wait_on_the_scheduler() {
         let (reply, answer) = oneshot::channel::<u32>();
         let (sender, mut receiver) = broadcast::channel::<u32>(1);
         let blocking = {
-            let (mutex, lock, semaphore) =
-                (Arc::clone(&mutex), Arc::clone(&lock), Arc::clone(&semaphore));
+            let (mutex, lock, semaphore) = (
+                Arc::clone(&mutex),
+                Arc::clone(&lock),
+                Arc::clone(&semaphore),
+            );
             handle.spawn_blocking(move || {
                 let base = answer.blocking_recv().unwrap();
                 let _permit = semaphore.blocking_acquire().unwrap();
@@ -433,7 +436,10 @@ mod workers {
                     handle.await.unwrap();
                 }
             });
-            let threads = switchy_thread::simulator::scheduler().snapshot().threads.len();
+            let threads = switchy_thread::simulator::scheduler()
+                .snapshot()
+                .threads
+                .len();
             assert!(threads <= 4, "{threads} threads");
         });
     }
@@ -523,7 +529,11 @@ fn shutting_down_a_runtime_while_another_thread_polls_its_task_ends_it_at_that_p
             assert!(server.is_shut_down());
             // Nothing of the server runs once its shutdown returned, not even the poll the
             // pump was in the middle of.
-            assert_eq!(progress.load(Ordering::SeqCst), at_shutdown.1, "seed {seed}");
+            assert_eq!(
+                progress.load(Ordering::SeqCst),
+                at_shutdown.1,
+                "seed {seed}"
+            );
             at_shutdown.0
         });
         assert!(

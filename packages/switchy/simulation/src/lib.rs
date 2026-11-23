@@ -224,8 +224,7 @@ thread_local! {
 
 /// Whether threads must be given a context before they reach the simulators
 /// ([`require_contexts`]).
-static CONTEXTS_REQUIRED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static CONTEXTS_REQUIRED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// From now on, a thread that reaches the simulators without having been given a context
 /// ([`set_current`], [`with_context`]) panics, instead of quietly getting a fresh context of
@@ -246,6 +245,16 @@ pub fn has_current() -> bool {
     CURRENT.with_borrow(Option::is_some)
 }
 
+/// Whether [`current`] would succeed on this thread.
+///
+/// It would when the thread has a context, or may make one. It would not once
+/// [`require_contexts`] was called, on a thread no run knows (for example the harness's own
+/// thread after its runs ended), where simulator calls must not reach for a run's state.
+#[must_use]
+pub fn context_available() -> bool {
+    has_current() || !CONTEXTS_REQUIRED.load(Ordering::Relaxed)
+}
+
 /// The current thread's context, creating a fresh one seeded with [`initial_seed`] if the
 /// thread has none yet.
 ///
@@ -255,20 +264,22 @@ pub fn has_current() -> bool {
 ///   started through the simulators (a `std::thread::spawn`, say)
 #[must_use]
 pub fn current() -> Arc<Context> {
-    CURRENT.with_borrow_mut(|current| {
-        if let Some(context) = current {
-            return Arc::clone(context);
-        }
-        assert!(
-            !CONTEXTS_REQUIRED.load(Ordering::Relaxed),
-            "thread {:?} reached a switchy simulator, but no simulation run knows it: it was \
+    if let Some(context) = CURRENT.with_borrow(Clone::clone) {
+        return context;
+    }
+    // Assert with no borrow of `CURRENT` held: a panic hook that reaches the simulators (as
+    // harnesses' do) must find it free, or the panic aborts the process before reporting.
+    assert!(
+        !CONTEXTS_REQUIRED.load(Ordering::Relaxed),
+        "thread {:?} reached a switchy simulator, but no simulation run knows it: it was \
              started outside the simulation's scheduler (std::thread::spawn, or a \
              dependency's thread pool), so its clock, randomness and schedule are no run's. \
              Start it with switchy_thread (or switchy_async), or keep it off simulated code. \
              RUST_BACKTRACE=1 shows where it reached the simulator.",
-            std::thread::current().name().unwrap_or("<unnamed>")
-        );
-        Arc::clone(current.insert(Context::new(initial_seed())))
+        std::thread::current().name().unwrap_or("<unnamed>")
+    );
+    CURRENT.with_borrow_mut(|current| {
+        Arc::clone(current.get_or_insert_with(|| Context::new(initial_seed())))
     })
 }
 
@@ -515,7 +526,11 @@ mod tests {
         let given = Context::new(3);
         set_current(Some(Arc::clone(&given)));
         require_contexts();
-        assert_eq!(current().id(), given.id(), "a thread with a context keeps it");
+        assert_eq!(
+            current().id(),
+            given.id(),
+            "a thread with a context keeps it"
+        );
         let shared = Arc::clone(&given);
         std::thread::spawn(move || with_context(shared, || current().seed()))
             .join()
@@ -558,7 +573,9 @@ mod tests {
                 assert!(in_run());
             });
             assert!(!in_run(), "the run ends with its context");
-            with_context(run, || assert!(in_run(), "a run's threads share its context"));
+            with_context(run, || {
+                assert!(in_run(), "a run's threads share its context");
+            });
         })
         .join()
         .unwrap();

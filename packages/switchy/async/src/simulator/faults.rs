@@ -136,7 +136,10 @@ fn draw<T>(stream: &str, f: impl FnOnce(&mut switchy_simulation::Rng) -> T) -> T
 
 fn late() -> Arc<LateWakeups> {
     switchy_simulation::state_with(|| {
-        LateWakeups(Fault::new(configured(LATE_WAKEUPS_ENV, LATE_WAKEUPS_STREAM)))
+        LateWakeups(Fault::new(configured(
+            LATE_WAKEUPS_ENV,
+            LATE_WAKEUPS_STREAM,
+        )))
     })
 }
 
@@ -200,6 +203,10 @@ pub fn fault_counts() -> FaultCounts {
 /// drawn), when `eligible` says the wakeup cannot be late (nothing is drawn either), or when
 /// the draw says it is on time.
 pub fn late_wakeup(eligible: impl FnOnce() -> bool) -> Option<u64> {
+    // No run's faults apply on a thread no run knows (tasks woken as a simulation ends).
+    if !switchy_simulation::context_available() {
+        return None;
+    }
     let late = late();
     let probability = late.0.get();
     if probability <= 0.0 || !eligible() {
@@ -242,6 +249,9 @@ pub fn with_owed<R>(owed: &AtomicBool, poll: impl FnOnce() -> R) -> R {
 /// and `ready` (called with no lock of the caller held) says the leaf would complete. If so,
 /// the waker is woken at once. Nothing is drawn while the fault is off or the leaf not ready.
 pub fn spurious_pending_now(cx: &Context<'_>, ready: impl FnOnce() -> bool) -> bool {
+    if !switchy_simulation::context_available() {
+        return false;
+    }
     let spurious = spurious();
     let probability = spurious.0.get();
     if probability <= 0.0 || !ready() || OWED.replace(false) {
@@ -278,7 +288,11 @@ impl<F: FnOnce() -> bool + Unpin> Future for SpuriousPoint<F> {
             .ready
             .take()
             .is_some_and(|ready| spurious_pending_now(cx, ready));
-        if spurious { Poll::Pending } else { Poll::Ready(()) }
+        if spurious {
+            Poll::Pending
+        } else {
+            Poll::Ready(())
+        }
     }
 }
 

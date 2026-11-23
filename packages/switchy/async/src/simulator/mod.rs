@@ -16,8 +16,8 @@ mod yields;
 
 pub use faults::{
     FaultCounts, LATE_WAKEUP_MAX_STEPS, LATE_WAKEUPS_ENV, LATE_WAKEUPS_STREAM,
-    SPURIOUS_PENDING_ENV, SPURIOUS_PENDING_STREAM, fault_counts, late_wakeups,
-    set_late_wakeups, set_spurious_pending, spurious_pending,
+    SPURIOUS_PENDING_ENV, SPURIOUS_PENDING_STREAM, fault_counts, late_wakeups, set_late_wakeups,
+    set_spurious_pending, spurious_pending,
 };
 pub use yields::{YIELD_PROBABILITY_ENV, YIELD_STREAM, set_yield_probability, yield_probability};
 

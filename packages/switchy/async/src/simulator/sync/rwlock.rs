@@ -460,7 +460,10 @@ impl<'a, T: ?Sized> RwLockWriteGuard<'a, T> {
     /// # Errors
     ///
     /// * This guard, if `f` returns `None`
-    pub fn try_map<F, U: ?Sized>(mut this: Self, f: F) -> Result<RwLockMappedWriteGuard<'a, U>, Self>
+    pub fn try_map<F, U: ?Sized>(
+        mut this: Self,
+        f: F,
+    ) -> Result<RwLockMappedWriteGuard<'a, U>, Self>
     where
         F: FnOnce(&mut T) -> Option<&mut U>,
     {
@@ -562,7 +565,10 @@ impl<'a, T: ?Sized> RwLockMappedWriteGuard<'a, T> {
     /// # Errors
     ///
     /// * This guard, if `f` returns `None`
-    pub fn try_map<F, U: ?Sized>(mut this: Self, f: F) -> Result<RwLockMappedWriteGuard<'a, U>, Self>
+    pub fn try_map<F, U: ?Sized>(
+        mut this: Self,
+        f: F,
+    ) -> Result<RwLockMappedWriteGuard<'a, U>, Self>
     where
         F: FnOnce(&mut T) -> Option<&mut U>,
     {
@@ -667,7 +673,9 @@ impl<T: ?Sized> OwnedRwLockWriteGuard<T> {
     fn into_parts(self) -> (u32, Arc<RwLock<T>>) {
         let this = ManuallyDrop::new(self);
         // SAFETY: read once from a guard that is never dropped.
-        (this.permits, unsafe { std::ptr::read(&raw const this.lock) })
+        (this.permits, unsafe {
+            std::ptr::read(&raw const this.lock)
+        })
     }
 
     /// A guard of part of the value, holding the write access.
@@ -793,7 +801,9 @@ impl<T: ?Sized, U: ?Sized> OwnedRwLockMappedWriteGuard<T, U> {
     fn into_parts(self) -> (u32, Arc<RwLock<T>>) {
         let this = ManuallyDrop::new(self);
         // SAFETY: read once from a guard that is never dropped.
-        (this.permits, unsafe { std::ptr::read(&raw const this.lock) })
+        (this.permits, unsafe {
+            std::ptr::read(&raw const this.lock)
+        })
     }
 
     /// A guard of part of this part, holding the write access.

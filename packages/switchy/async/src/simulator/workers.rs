@@ -158,7 +158,10 @@ impl Pool {
         IN_STEP.set(outer);
         let mut state = self.lock();
         while state.outstanding > 0 && !runtime.is_shut_down() {
-            state = self.done.wait(state).unwrap_or_else(PoisonError::into_inner);
+            state = self
+                .done
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
         }
         // Shut down: its workers are killed, and the jobs they never took are dropped.
         let untaken = std::mem::take(&mut state.jobs);
@@ -180,7 +183,10 @@ impl Pool {
                 if let Some(task) = state.jobs.pop_front() {
                     break task;
                 }
-                state = self.work.wait(state).unwrap_or_else(PoisonError::into_inner);
+                state = self
+                    .work
+                    .wait(state)
+                    .unwrap_or_else(PoisonError::into_inner);
             };
             drop(state);
             let done = JobDone(self);
