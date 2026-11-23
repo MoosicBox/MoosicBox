@@ -18516,6 +18516,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_cargo"
+version = "0.5.0"
+dependencies = [
+ "cargo_metadata 0.23.1",
+ "clap",
+ "pretty_assertions",
+ "semver",
+ "serde",
+ "serde_json",
+ "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
 name = "switchy_database"
 version = "0.5.0"
 dependencies = [
