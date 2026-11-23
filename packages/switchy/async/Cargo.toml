@@ -98,4 +98,5 @@ process         = ["tokio?/process"]
 rt-multi-thread = ["tokio?/rt-multi-thread"]
 sync            = ["dep:flume", "tokio?/sync"]
 time            = ["dep:switchy_time", "switchy_time?/std", "tokio?/time"]
-util            = ["dep:tokio-util"]
+# The simulator's `util` is its own; the Tokio backend's wraps tokio-util (see `tokio`).
+util            = []

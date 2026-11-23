@@ -180,21 +180,50 @@ variants or `poll_join_next`, and a panicking task fails the run rather than joi
 
 With the `sync` feature, `sync` provides `Mutex`, `RwLock`, `Semaphore`, `Notify`,
 `Barrier`, and the `oneshot`, `mpsc`, `mpmc`, `broadcast` and `watch` channels. With the
-Tokio backend all but `mpsc` and `mpmc` are Tokio's. Under the simulator, `Mutex`, `RwLock`,
-`Semaphore`, `Notify`, `oneshot` and `broadcast` are still Tokio's: they wake waiters first
-in, first out, so their order follows the run's schedule. `Barrier`, `mpsc`, `mpmc` and
-`watch` are the simulator's own.
+Tokio backend all but `mpsc` and `mpmc` are Tokio's. Under the simulator every one is the
+simulator's own, with Tokio's API (`mpsc` wraps Tokio's unbounded channel):
 
-The simulator's `watch` has Tokio's API (`channel`, `Sender::{send, send_replace,
-send_modify, send_if_modified, borrow, subscribe, receiver_count, sender_count, is_closed,
-closed}`, `Receiver::{borrow, borrow_and_update, changed, wait_for, has_changed, is_closed,
-mark_changed, mark_unchanged, same_channel}`, `Ref` and `error::{SendError, RecvError}`).
-Tokio's watch puts each waiting receiver in one of eight queues picked by Tokio's
-thread-local random number generator, which no seed controls, so with several receivers
-waiting their wake order changed from run to run. The simulator's wakes waiting receivers
-(and `Sender::closed` waiters) in the order they started waiting. With `thread-simulator`, a
-simulated thread that finds the value locked by another (one holding a `Ref`) waits on the
-run's scheduler instead of blocking its OS thread.
+- `Mutex` (`lock`, `lock_owned`, `try_lock`, `try_lock_owned`, `blocking_lock`,
+  `blocking_lock_owned`, `get_mut`, `into_inner`; `MutexGuard`, `OwnedMutexGuard` and their
+  `map` / `try_map` to `MappedMutexGuard` / `OwnedMappedMutexGuard`; `TryLockError`)
+- `RwLock` (`read`, `write`, their `_owned`, `try_` and `blocking_` forms,
+  `with_max_readers`; `RwLockReadGuard`, `RwLockWriteGuard`, `RwLockMappedWriteGuard` and the
+  owned guards, with `map`, `try_map`, `downgrade`, `downgrade_map` and `into_mapped`)
+- `Semaphore` (`acquire`, `acquire_many`, their `_owned`, `try_` and `blocking_` forms,
+  `add_permits`, `forget_permits`, `close`; `SemaphorePermit` and `OwnedSemaphorePermit` with
+  `forget`, `merge`, `split`; `AcquireError`, `TryAcquireError`)
+- `Notify` (`notified`, `notified_owned`, `notify_one`, `notify_last`, `notify_waiters`;
+  `futures::{Notified, OwnedNotified}` with `enable`)
+- `oneshot` (`Sender::{send, closed, poll_closed, is_closed}`, `Receiver::{close, try_recv,
+  blocking_recv, is_empty, is_terminated}`, `error::{RecvError, TryRecvError}`)
+- `broadcast` (`channel`, `Sender::{new, send, subscribe, downgrade, len, is_empty,
+  receiver_count, closed, strong_count, weak_count}`, `WeakSender`, `Receiver::{recv,
+  try_recv, blocking_recv, resubscribe, len, is_empty, is_closed}`, `error::{SendError,
+  RecvError, TryRecvError}`)
+- `watch` (`channel`, `Sender::{send, send_replace, send_modify, send_if_modified, borrow,
+  subscribe, receiver_count, sender_count, is_closed, closed}`, `Receiver::{borrow,
+  borrow_and_update, changed, wait_for, has_changed, is_closed, mark_changed, mark_unchanged,
+  same_channel}`, `Ref` and `error::{SendError, RecvError}`)
+
+With the `util` feature, `util::CancellationToken` is likewise the simulator's own, with
+tokio-util's API (`child_token`, `cancel`, `is_cancelled`, `cancelled`, `cancelled_owned`,
+`run_until_cancelled`, `run_until_cancelled_owned`, `drop_guard`, `drop_guard_ref`).
+
+They are deterministic by construction: each keeps its waiters in one list ordered by when
+they started waiting and wakes them in a defined order, with no shards, no random choice and
+nothing that depends on addresses. As Tokio's, the locks and the semaphore are fair (waiters
+get the lock or permits first in, first out, and a cancelled waiter gives up its place and
+any permits it was given); `notify_one` wakes the oldest waiter and `notify_last` the newest;
+`notify_waiters`, a broadcast send and a cancellation wake every waiter, oldest first. Tokio's
+`watch`, by contrast, puts each waiting receiver in one of eight queues picked by Tokio's
+thread-local random number generator, which no seed controls. Contract tests
+(`tests/sync_tokio_contract.rs`) run each against Tokio's and tokio-util's, comparing results
+and wake order.
+
+Each of their futures is subject to the spurious `Pending` fault (see below). With
+`thread-simulator`, their `blocking_*` methods called from a simulated thread wait on the run's
+scheduler instead of blocking its OS thread, as does a simulated thread that finds a `watch`
+value locked by another (one holding a `Ref`).
 
 ### Thread Management
 
@@ -331,12 +360,13 @@ fault was drawn and fired in the run.
   still counts as unfinished (`wait`, `try_finish`), `shutdown_now` drops it, and an executor
   with late tasks steps on instead of idling, so none is lost.
 - **Spurious `Pending`**: a ready leaf future of the simulator (sleeps and timeouts,
-  `futures::Instant`, intervals, its own `mpmc` channels, `watch` and `Barrier`, the `mpsc`
-  and bounded channels it wraps, and join handles) sometimes returns `Pending` once and wakes
-  itself at once, before consuming anything. Correct code cannot tell; code that assumes a ready future
-  completes on this poll can. It reaches awaits `#[inject_yields]` does not. After a spurious
-  `Pending`, the task's next ready leaf completes without a draw, so even a probability of 1
-  makes progress. tokio's own futures (its locks, `Notify`, `oneshot`, `broadcast`) are not
+  `futures::Instant`, intervals, its own `Mutex`, `RwLock`, `Semaphore`, `Notify`, `oneshot`,
+  `broadcast`, `mpmc` and `watch` channels, `Barrier` and `CancellationToken`, the `mpsc` and
+  bounded channels it wraps, and join handles) sometimes returns `Pending` once and wakes
+  itself at once, before consuming anything. Correct code cannot tell; code that assumes a
+  ready future completes on this poll can. It reaches awaits `#[inject_yields]` does not.
+  After a spurious `Pending`, the task's next ready leaf completes without a draw, so even a
+  probability of 1 makes progress. tokio's own futures (its I/O, `task::yield_now`) are not
   reached.
 
 ### Runtime Features
@@ -384,7 +414,8 @@ Feature-gated dependencies:
 
 - **futures**: Core Future trait and utilities (enabled with backend features)
 - **tokio**: Tokio async runtime (optional, enabled with `tokio` feature)
-- **tokio-util**: Additional Tokio utilities (optional, enabled with `tokio` or `util` features)
+- **tokio-util**: Additional Tokio utilities (optional, enabled with the `tokio` feature; the
+  simulator's `util` does not use it)
 - **flume**: MPSC/MPMC channel implementation (optional, enabled with `sync` feature)
 - **switchy_async_macros**: Macro utilities (optional, enabled with `macros` feature)
 - **switchy_random**: Random number generation for simulator (optional, enabled with `simulator` feature)
