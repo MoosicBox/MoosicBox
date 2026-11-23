@@ -30,12 +30,19 @@ struct Args {
     /// With `--scan-external`, show each crate's first findings.
     #[arg(long)]
     verbose: bool,
+    /// Check the `runs = false` claims instead, against this `llvm-cov export -summary-only`
+    /// of the simulation's coverage-instrumented runs: fail if a file of such a crate ran.
+    #[arg(long, value_name = "EXPORT")]
+    coverage: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
     let args = Args::parse();
     let mut passed = true;
     let mut baseline = std::collections::BTreeSet::new();
+    if let Some(export) = &args.coverage {
+        return check_claims(&args, export);
+    }
     if args.scan_external {
         let mut seen = std::collections::BTreeSet::new();
         for package in &args.packages {
@@ -93,6 +100,50 @@ fn main() -> ExitCode {
             print!("\n[[audit]]{entry}");
         }
     }
+    if passed {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+/// `--coverage`: check every package's `runs = false` claims against the export.
+fn check_claims(args: &Args, export: &std::path::Path) -> ExitCode {
+    let executed = match std::fs::read_to_string(export)
+        .map_err(|e| e.to_string())
+        .and_then(|json| switchy_cargo::coverage::Executed::from_llvm_cov_export(&json))
+    {
+        Ok(executed) => executed,
+        Err(e) => {
+            eprintln!("{}: {e}", export.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut passed = true;
+    for package in &args.packages {
+        match switchy_cargo::Check::with_workspace_config(&args.manifest_path, package)
+            .and_then(|check| check.run_claims(&executed))
+        {
+            Ok(broken) => {
+                for (krate, files) in &broken {
+                    println!("{package}: {krate} is marked `runs = false`, but ran:");
+                    for (file, lines) in files {
+                        println!("  {} ({lines} lines)", file.display());
+                    }
+                }
+                passed &= broken.is_empty();
+            }
+            Err(e) => {
+                eprintln!("{package}: {e}");
+                passed = false;
+            }
+        }
+    }
+    println!(
+        "{} files in the profile; `runs = false` claims {}",
+        executed.files(),
+        if passed { "held" } else { "BROKEN: remove the crate's `runs = false` so the check scans it" }
+    );
     if passed {
         ExitCode::SUCCESS
     } else {

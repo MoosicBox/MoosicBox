@@ -25,6 +25,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 pub mod config;
+pub mod coverage;
 pub mod graph;
 pub mod manifest;
 pub mod scan;
@@ -56,6 +57,10 @@ pub enum CrateOutcome {
     /// Its rules could not be used.
     BadRules(String),
 }
+
+/// A crate marked `runs = false` that ran: its name, and each of its files that ran with how
+/// many of their lines did.
+pub type BrokenClaim = (String, Vec<(PathBuf, u64)>);
 
 /// What a [`Check`] found.
 #[derive(Debug, Clone, Default)]
@@ -141,6 +146,30 @@ impl Check {
 }
 
 impl Check {
+    /// Check the `runs = false` claims of the local crates the simulation links against what
+    /// its instrumented runs `executed` ([`coverage`]): every file of such a crate that ran,
+    /// by crate, with how many of its lines did. Empty when every claim held.
+    ///
+    /// # Errors
+    ///
+    /// * If the dependency graph cannot be resolved
+    pub fn run_claims(&self, executed: &coverage::Executed) -> Result<Vec<BrokenClaim>, String> {
+        let graph = graph::resolve(&self.manifest_path, &self.package)?;
+        let mut broken = Vec::new();
+        for krate in &graph.local {
+            let src = krate.dir.join("src");
+            let not_run = Rules::from_metadata(&krate.metadata, &src).is_ok_and(|r| !r.runs);
+            if !not_run {
+                continue;
+            }
+            let ran = executed.under(&krate.dir);
+            if !ran.is_empty() {
+                broken.push((krate.name.clone(), ran));
+            }
+        }
+        Ok(broken)
+    }
+
     /// Scan every external crate the simulation links by the shared rules (as if it had no
     /// rules of its own), as evidence for its audit: a crate whose compiled code reaches no
     /// clock, randomness, thread, file, environment or process-wide state is a candidate for
