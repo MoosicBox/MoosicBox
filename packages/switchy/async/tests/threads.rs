@@ -200,6 +200,30 @@ fn block_on_wakes_for_a_future_completed_by_another_thread() {
 }
 
 #[test]
+fn block_on_repolls_a_future_that_wakes_itself() {
+    for seed in 0..10 {
+        let (elapsed, _) = run(seed, |runtime| {
+            // Another thread stays alive, so an idle executor would wait on the scheduler.
+            let sleeper = thread::spawn(|| thread::sleep(Duration::from_secs(3600)));
+            let start = switchy_time::instant_now();
+            runtime.block_on(async {
+                for _ in 0..3 {
+                    switchy_async::task::yield_now().await;
+                }
+            });
+            let elapsed = switchy_time::instant_now().duration_since(start);
+            sleeper.join().unwrap();
+            elapsed
+        });
+        // The yields' own wakes end each wait, not the sleeper's exit an hour later.
+        assert!(
+            elapsed < Duration::from_secs(3600),
+            "seed {seed}: {elapsed:?}"
+        );
+    }
+}
+
+#[test]
 fn a_task_spawned_from_another_thread_wakes_the_executor() {
     for seed in 0..10 {
         let (value, _) = run(seed, |runtime| {

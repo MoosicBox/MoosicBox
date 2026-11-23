@@ -354,17 +354,21 @@ impl GenericRuntime for Runtime {
         self.start();
         RUNTIME.set(self, || {
             let mut future = Box::pin(future);
-            let waker = self.blocking_waker();
+            let woken = Arc::new(AtomicBool::new(false));
+            let waker = self.blocking_waker(&woken);
             let mut ctx = Context::from_waker(&waker);
             let owed = AtomicBool::new(false);
             loop {
+                woken.store(false, Ordering::SeqCst);
                 #[allow(clippy::significant_drop_in_scrutinee)]
                 match super::faults::with_owed(&owed, || future.as_mut().poll(&mut ctx)) {
                     Poll::Ready(x) => {
                         return x;
                     }
                     Poll::Pending => {
-                        if !self.process_next_task() {
+                        // A wake while it was polled (a `yield_now`, say) reached no waiting
+                        // executor: poll again rather than wait for another.
+                        if !self.process_next_task() && !woken.load(Ordering::SeqCst) {
                             self.idle();
                         }
                     }
@@ -470,38 +474,45 @@ impl Runtime {
     /// tasks on the calling thread until it completes.
     fn block_on_nested<F: Future>(&self, future: F) -> F::Output {
         let mut future = std::pin::pin!(future);
-        let waker = self.blocking_waker();
+        let woken = Arc::new(AtomicBool::new(false));
+        let waker = self.blocking_waker(&woken);
         let mut ctx = Context::from_waker(&waker);
         let owed = AtomicBool::new(false);
         loop {
+            woken.store(false, Ordering::SeqCst);
             if let Poll::Ready(output) =
                 super::faults::with_owed(&owed, || future.as_mut().poll(&mut ctx))
             {
                 return output;
             }
-            if !self.process_next_task() {
+            if !self.process_next_task() && !woken.load(Ordering::SeqCst) {
                 self.idle();
             }
         }
     }
 
-    /// The waker of a future [`Self::block_on`] drives itself: waking it wakes this executor if
-    /// it waits for something to do, so a future completed from another thread (a channel's
-    /// sender, say) is polled again even when no task of this runtime runs.
-    fn blocking_waker(&self) -> Waker {
-        struct Blocking(Runtime);
+    /// The waker of a future [`Self::block_on`] drives itself: waking it sets `woken` and wakes
+    /// this executor if it waits for something to do, so a future completed from another thread
+    /// (a channel's sender, say), or that wakes itself while polled, is polled again even when
+    /// no task of this runtime runs.
+    fn blocking_waker(&self, woken: &Arc<AtomicBool>) -> Waker {
+        struct Blocking(Runtime, Arc<AtomicBool>);
         impl Wake for Blocking {
             fn wake(self: Arc<Self>) {
-                self.0.notify();
+                self.wake_by_ref();
             }
             fn wake_by_ref(self: &Arc<Self>) {
+                self.1.store(true, Ordering::SeqCst);
                 self.0.notify();
             }
         }
-        Waker::from(Arc::new(Blocking(Self {
-            handle: None,
-            ..self.clone()
-        })))
+        Waker::from(Arc::new(Blocking(
+            Self {
+                handle: None,
+                ..self.clone()
+            },
+            Arc::clone(woken),
+        )))
     }
 
     /// Wait for something to do, having nothing to run.
