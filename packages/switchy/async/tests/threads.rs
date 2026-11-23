@@ -241,6 +241,60 @@ fn a_task_can_spawn_onto_another_runtime_and_drive_it() {
     }
 }
 
+/// A simulated thread in a `blocking_*` call of the simulator's own primitives waits on the
+/// run's scheduler: the async tasks it waits for run meanwhile, and runs replay by seed.
+#[cfg(feature = "sync")]
+#[test]
+fn blocking_sync_calls_wait_on_the_scheduler() {
+    use switchy_async::sync::{Mutex as AsyncMutex, RwLock, Semaphore, broadcast, oneshot};
+
+    async fn work(handle: switchy_async::simulator::runtime::Handle) -> u32 {
+        let mutex = Arc::new(AsyncMutex::new(0));
+        let lock = Arc::new(RwLock::new(0));
+        let semaphore = Arc::new(Semaphore::new(0));
+        let held = Arc::clone(&mutex).lock_owned().await;
+        let written = Arc::clone(&lock).write_owned().await;
+        let (reply, answer) = oneshot::channel::<u32>();
+        let (sender, mut receiver) = broadcast::channel::<u32>(1);
+        let blocking = {
+            let (mutex, lock, semaphore) =
+                (Arc::clone(&mutex), Arc::clone(&lock), Arc::clone(&semaphore));
+            handle.spawn_blocking(move || {
+                let base = answer.blocking_recv().unwrap();
+                let _permit = semaphore.blocking_acquire().unwrap();
+                *mutex.blocking_lock() += base;
+                *lock.blocking_write() += receiver.blocking_recv().unwrap();
+                *mutex.blocking_lock() + *lock.blocking_read()
+            })
+        };
+        // Let the blocking thread start and wait for each in turn.
+        switchy_async::simulator::task::yield_now().await;
+        reply.send(5).unwrap();
+        for _ in 0..3 {
+            switchy_async::simulator::task::yield_now().await;
+        }
+        semaphore.add_permits(1);
+        drop(held);
+        drop(written);
+        sender.send(2).unwrap();
+        blocking.await.unwrap()
+    }
+
+    fn scenario(runtime: &Runtime) -> u32 {
+        let handle = runtime.handle();
+        // In a task: a future `block_on` drives itself must not wake itself while it is polled
+        // (by a yield, say) when other simulated threads are alive, or the executor idles past
+        // the wakeup.
+        runtime.block_on(async move { handle.clone().spawn(work(handle)).await.unwrap() })
+    }
+
+    for seed in 0..10 {
+        let (value, hash) = run(seed, scenario);
+        assert_eq!(value, 7, "seed {seed}");
+        assert_eq!(run(seed, scenario), (value, hash), "seed {seed}");
+    }
+}
+
 /// Several workers (a multi-thread runtime needs `rt-multi-thread`).
 #[cfg(feature = "rt-multi-thread")]
 mod workers {

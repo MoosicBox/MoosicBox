@@ -42,6 +42,8 @@ flume = { workspace = true, optional = true }
 pretty_assertions = { workspace = true }
 switchy_time      = { workspace = true, features = ["random", "simulator"] }
 test-log          = { workspace = true }
+tokio             = { workspace = true, features = ["sync"] }
+tokio-util        = { workspace = true }
 
 [features]
 default = [
