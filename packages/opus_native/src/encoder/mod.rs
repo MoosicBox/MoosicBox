@@ -898,6 +898,60 @@ impl Encoder {
                         continue;
                     }
                     if budget == nominal
+                        && eligible
+                        && internal_size == 480
+                        // Restrict the additional packet search to the resampled stereo
+                        // path; native-rate attacks do not recover complete selectors.
+                        && self.config.sample_rate == SampleRate::Hz24000
+                        && self.config.channels == Channels::Stereo
+                        && self.active_mode() == EncoderMode::Hybrid
+                        && (ending
+                            || (pcm.iter().all(|&x| x == 0.)
+                                && hybrid::release_start(&target) < target.len()))
+                        && let Some(f) = prepared_frame.as_ref()
+                        && let Some(incoming) = self.silk.as_ref()
+                    {
+                        for shift in [-16, 8] {
+                            let mut silk = incoming.clone();
+                            let Ok(range) = silk.decay_prefix(&state.adaptive_low, f.bytes, shift)
+                            else {
+                                continue;
+                            };
+                            for db in [-12, 0] {
+                                let mut suffix = f.clone();
+                                suffix.range = range.clone();
+                                for x in &mut suffix.target_energy {
+                                    *x += db * 10885;
+                                }
+                                let Ok(packet) = Self::encode_celt_suffix(suffix, None) else {
+                                    continue;
+                                };
+                                let mut dec = shadow.decoder.clone();
+                                let mut out = vec![0; target.len()];
+                                if packet.len() != 1 + f.bytes
+                                    || dec.decode(Some(&packet), &mut out, false).ok()
+                                        != Some(self.config.frame_size)
+                                {
+                                    continue;
+                                }
+                                let error = hybrid::release_error(&out, &target, split);
+                                if best.as_ref().is_none_or(|old| error < old.error) {
+                                    let mut trial = state.clone();
+                                    trial.silk = Some(silk.clone());
+                                    trial.native_prefix_score = None;
+                                    best = Some(PracticalCandidate {
+                                        #[cfg(test)]
+                                        bias: db,
+                                        error,
+                                        encoder: trial,
+                                        synthesis: dec,
+                                        packet,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    if budget == nominal
                     && eligible
                     // The low-band gain proposals exclude this near-floor regime.
                     && internal_size == 480

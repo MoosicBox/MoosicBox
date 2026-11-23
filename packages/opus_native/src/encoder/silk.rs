@@ -632,6 +632,87 @@ impl SilkEncoder {
     }
 
     #[cfg(feature = "hybrid")]
+    // Ten-millisecond unvoiced release: signal a falling gain across the two
+    // 5 ms subframes. Commit history in the second subframe’s gain domain.
+    pub(super) fn decay_prefix(
+        &mut self,
+        pcm: &[f32],
+        bytes: usize,
+        shift: i32,
+    ) -> Result<RangeEncoder> {
+        let ch = super::channel_count(self.config.channels);
+        let bw = bandwidth(self.config.sample_rate);
+        let mut enc = RangeEncoder::new(bytes).map_err(entropy)?;
+        encode_header(&mut enc, ch)?;
+        let mut frames = Vec::new();
+        let mut gains = Vec::new();
+        let mut ids = Vec::new();
+        for c in 0..ch {
+            let x: Vec<i32> = pcm
+                .chunks_exact(ch)
+                .map(|v| {
+                    let l = (v[0] * 32768.).round() as i32;
+                    if ch == 1 {
+                        l
+                    } else {
+                        let r = (v[1] * 32768.).round() as i32;
+                        if c == 0 { l.midpoint(r) } else { (l - r) / 2 }
+                    }
+                })
+                .collect();
+            let ix =
+                (self.previous_index[c] + shift).clamp((self.previous_index[c] - 16).max(0), 63);
+            let end = (ix - 4).max(0);
+            let g = SilkDecoder::dequantize_gain(ix);
+            let g2 = SilkDecoder::dequantize_gain(end);
+            let model = if x.iter().all(|&x| x == 0) {
+                self.silence_model(&x, c, bw, 16000)?
+            } else {
+                analyze_rate(&x, bw, self.config.bitrate / ch as u32)?
+            };
+            let frame = quantize_decay(
+                QuantizerInput {
+                    input: &x,
+                    lpc: &model.lpc,
+                    history: &self.history[c],
+                    old_gain: self.gain[c],
+                    gain: g,
+                    pitch: None,
+                    previous_pcm: &self.pcm_history[c],
+                    rate: 16000,
+                    bitrate: self.config.bitrate / ch as u32,
+                    rate_pressure: 0,
+                    optimize_pulse_cost: false,
+                    unshaped: true,
+                },
+                false,
+                Some(g2),
+            );
+            encode_parameters_delta(
+                &mut enc,
+                FrameParameters {
+                    model: &model,
+                    gain: ix,
+                    previous_gain: self.previous_index[c],
+                    long: false,
+                    bandwidth: bw,
+                    pitch: None,
+                    rate: 16000,
+                },
+                0,
+            )?;
+            encode_pulses(&mut enc, &frame.0, false)?;
+            frames.push(Arc::new(frame));
+            gains.push(g2);
+            ids.push(end);
+        }
+        if enc.tell() as usize + 37 <= bytes * 8 {
+            enc.ec_enc_bit_logp(false, 12).map_err(entropy)?;
+        }
+        self.commit_quantized(&frames, &gains, &ids, 16000);
+        Ok(enc)
+    }
+    #[cfg(feature = "hybrid")]
     pub(super) fn encode_prefix(&mut self, pcm: &[f32], encoder: &mut RangeEncoder) -> Result<()> {
         if self.config.frame_size > sample_rate(self.config.sample_rate)? / 50 {
             return Err(Error::Unsupported(
@@ -2174,6 +2255,22 @@ fn quantize_levels(
     context: QuantizerInput<'_>,
     zero_pulses: bool,
 ) -> (Vec<i16>, [i32; 16], Vec<i16>) {
+    quantize_decay(context, zero_pulses, None)
+}
+fn rescale_history(history: &mut [i32; 16], old: i32, new: i32) {
+    if old != new {
+        let ratio = prediction::gain_ratio(old, new);
+        for sample in history {
+            *sample = ((i64::from(*sample) * i64::from(ratio)) >> 16) as i32;
+        }
+    }
+}
+
+fn quantize_decay(
+    context: QuantizerInput<'_>,
+    zero_pulses: bool,
+    next: Option<i32>,
+) -> (Vec<i16>, [i32; 16], Vec<i16>) {
     let QuantizerInput {
         input,
         lpc,
@@ -2188,13 +2285,9 @@ fn quantize_levels(
         optimize_pulse_cost,
         unshaped,
     } = context;
+    let mut current_gain = gain;
     let mut history = *history;
-    if old_gain != gain {
-        let ratio = prediction::gain_ratio(old_gain, gain);
-        for value in &mut history {
-            *value = ((i64::from(*value) * i64::from(ratio)) >> 16) as i32;
-        }
-    }
+    rescale_history(&mut history, old_gain, current_gain);
     let mut ltp = pitch
         .map(|p| prediction::rewhiten(previous_pcm, lpc, gain, p.lag, rate / 50))
         .unwrap_or_default();
@@ -2215,6 +2308,13 @@ fn quantize_levels(
     #[cfg(test)]
     let reference_pulses = pulse::REFERENCE.get();
     for (i, &sample) in input.iter().enumerate() {
+        if i == input.len() / 2
+            && let Some(g) = next
+        {
+            rescale_history(&mut history, current_gain, g);
+            current_gain = g;
+        }
+
         let prediction = ((lpc.len() / 2) as i32
             + lpc
                 .iter()
@@ -2234,7 +2334,7 @@ fn quantize_levels(
             }
             sum.wrapping_shl(1)
         });
-        let target = (i64::from(sample) * (1_i64 << 30) / i64::from(gain))
+        let target = (i64::from(sample) * (1_i64 << 30) / i64::from(current_gain))
             .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
         seed = seed.wrapping_mul(196_314_165).wrapping_add(907_633_515);
         let sign = if seed & 0x8000_0000 == 0 {
@@ -2265,7 +2365,7 @@ fn quantize_levels(
         }
         history.copy_within(1.., 0);
         history[15] = reconstructed;
-        let product = ((i64::from(reconstructed) * i64::from(gain >> 6)) >> 16) as i32;
+        let product = ((i64::from(reconstructed) * i64::from(current_gain >> 6)) >> 16) as i32;
         pcm.push((((product >> 7) + 1) >> 1).clamp(-32768, 32767) as i16);
         pulses.push(pulse);
     }
@@ -2311,6 +2411,13 @@ fn encode_header(encoder: &mut RangeEncoder, channels: usize) -> Result<()> {
 }
 
 fn encode_parameters(enc: &mut impl SilkEntropy, parameters: FrameParameters<'_>) -> Result<()> {
+    encode_parameters_delta(enc, parameters, 4)
+}
+fn encode_parameters_delta(
+    enc: &mut impl SilkEntropy,
+    parameters: FrameParameters<'_>,
+    delta: usize,
+) -> Result<()> {
     use silk::constants::{
         FRAME_TYPE_PDF_ACTIVE, GAIN_PDF_DELTA, GAIN_PDF_LSB, GAIN_PDF_UNVOICED, GAIN_PDF_VOICED,
     };
@@ -2346,7 +2453,7 @@ fn encode_parameters(enc: &mut impl SilkEntropy, parameters: FrameParameters<'_>
     enc.ec_enc_icdf((coded & 7) as usize, GAIN_PDF_LSB, 8)
         .map_err(entropy)?;
     for _ in 1..if long { 4 } else { 2 } {
-        enc.ec_enc_icdf(4, GAIN_PDF_DELTA, 8).map_err(entropy)?;
+        enc.ec_enc_icdf(delta, GAIN_PDF_DELTA, 8).map_err(entropy)?;
     }
     enc.ec_enc_icdf(
         usize::from(model.stage1),
