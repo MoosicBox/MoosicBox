@@ -159,6 +159,13 @@ This package is designed for:
 - **Regression Testing**: Reproducible test scenarios for complex async applications
 - **Development**: Testing framework for async applications with simulated I/O
 
+## Determinism
+
+[Making a crate simulatable](SIMULATABLE.md) lists what code a simulation runs must use, and
+how each run's determinism is checked: full-observation verification in a fresh process, the
+dependency-graph check (`switchy_cargo`), interception of randomness and the environment, and
+tripwires.
+
 ## Note
 
 This package serves as a facade for the simulation variable system, re-exporting functionality from the core harness and providing optional utilities. The `simvar_harness` package provides the actual implementation of the simulation framework.
