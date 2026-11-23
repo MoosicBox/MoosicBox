@@ -1140,8 +1140,6 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         switchy::random::simulator::reset_rng();
         switchy::tcp::simulator::reset();
         switchy::network::reset();
-        #[cfg(feature = "fs")]
-        switchy::fs::simulator::reset_fs();
         #[cfg(feature = "time")]
         switchy::time::simulator::reset_epoch_offset();
         // A replay pins the recorded offset after drawing one, so every later draw matches.
@@ -1151,6 +1149,11 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         }
         #[cfg(feature = "time")]
         switchy::time::simulator::reset_step_multiplier();
+        // After the clock: the new filesystem's root is stamped with the run's time. Before
+        // it, the root read a clock that had drawn an offset of its own, which a replay given
+        // the recorded offset does not draw.
+        #[cfg(feature = "fs")]
+        switchy::fs::simulator::reset_fs();
         reset_simulator_cancellation_token();
         reset_step();
         // Only a run something compares records what it observed; others pay nothing for it.
