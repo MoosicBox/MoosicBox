@@ -69,6 +69,11 @@ pub mod rand;
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
+/// `getrandom`'s custom backend for simulation builds: every draw comes from the current run's
+/// seed.
+#[cfg(feature = "simulator")]
+pub mod getrandom;
+
 /// A thread-safe random number generator trait.
 ///
 /// This trait extends `RngCore` with thread safety guarantees and additional methods

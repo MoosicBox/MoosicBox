@@ -22,8 +22,15 @@ switchy_simulation = { workspace = true, optional = true }
 log     = { workspace = true }
 rand_08 = { workspace = true, features = ["small_rng", "std", "std_rng"] }
 
+# Simulation builds draw every `getrandom` 0.3/0.4 call from the run's seed (src/getrandom.rs).
+[target.'cfg(getrandom_backend = "custom")'.dependencies]
+getrandom_04 = { workspace = true, optional = true }
+
 [dev-dependencies]
 test-log = { workspace = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(getrandom_backend, values("custom"))'] }
 
 [features]
 default = ["rand", "simulator"]
@@ -31,4 +38,4 @@ default = ["rand", "simulator"]
 fail-on-warnings = ["switchy_simulation?/fail-on-warnings"]
 
 rand      = []
-simulator = ["dep:switchy_simulation"]
+simulator = ["dep:getrandom_04", "dep:switchy_simulation"]

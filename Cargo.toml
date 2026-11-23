@@ -663,6 +663,8 @@ futures-core = "0.3.34"
 futures-util = { version = "0.3.34", default-features = false, features = [
     "std",
 ] }
+# The 0.3/0.4 custom-backend API (switchy_random's simulation builds; see its getrandom module).
+getrandom_04 = { package = "getrandom", version = "0.4.3", default-features = false }
 gh-emoji = { version = "1.0.9", default-features = false }
 git2 = "0.21.0"
 globset = { version = "0.4.20", default-features = false }
