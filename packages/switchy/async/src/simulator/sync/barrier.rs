@@ -4,7 +4,8 @@
 //! The implementation uses oneshot channels to coordinate between waiting tasks.
 
 use std::sync::{Arc, Mutex};
-use tokio::sync::oneshot;
+
+use super::oneshot;
 
 /// A barrier enables multiple tasks to synchronize the beginning of some computation.
 ///

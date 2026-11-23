@@ -12,13 +12,13 @@
 //!   time too, and a wakeup can lose a race it would win at once: against a timeout, say. A
 //!   woken task already waiting late stays where it is; one already queued is not delayed.
 //! * **Spurious `Pending`** ([`set_spurious_pending`], `SIMULATOR_SPURIOUS_PENDING`): a ready
-//!   leaf future of the simulator (its sleeps, instants and intervals, its own channels, watch
-//!   and barrier, the wrapped `mpsc` and bounded channels, join handles) sometimes returns
-//!   `Pending` once and wakes itself at once instead of returning `Ready`, before it consumes
-//!   anything. Correct code cannot tell; code that assumes a ready future completes on this
-//!   poll can. After a spurious `Pending`, the task's next ready leaf completes without a draw,
-//!   so even a probability of 1 makes progress. tokio's own futures (its locks, `Notify`,
-//!   `oneshot`, `broadcast`) are not reached.
+//!   leaf future of the simulator (its sleeps, instants and intervals, its own locks,
+//!   semaphore, `Notify`, channels, watch, barrier and cancellation token, the wrapped `mpsc`
+//!   and bounded channels, join handles) sometimes returns `Pending` once and wakes itself at
+//!   once instead of returning `Ready`, before it consumes anything. Correct code cannot tell;
+//!   code that assumes a ready future completes on this poll can. After a spurious `Pending`,
+//!   the task's next ready leaf completes without a draw, so even a probability of 1 makes
+//!   progress. tokio's own futures (its I/O, `task::yield_now`) are not reached.
 //!
 //! Each probability is a number in `0..=1` or `swarm` (draw it per run from
 //! `{0, 0.01, 0.05, 0.2}`, from the fault's stream); unset, it is 0.

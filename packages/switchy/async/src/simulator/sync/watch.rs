@@ -14,14 +14,15 @@
 //! thread, so the other simulated threads keep running and a deadlock is reported.
 
 use std::{
-    collections::BTreeMap,
     fmt,
     future::Future,
     ops::{Deref, DerefMut},
     pin::Pin,
     sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
 };
+
+use crate::simulator::waiters::{Waiters, wake};
 
 /// Watch error types.
 pub mod error {
@@ -56,45 +57,6 @@ pub mod error {
     }
 
     impl Error for RecvError {}
-}
-
-/// Wakers in the order their waits started.
-#[derive(Default)]
-struct Waiters {
-    next: u64,
-    wakers: BTreeMap<u64, Waker>,
-}
-
-impl Waiters {
-    /// Register (or refresh) the waker of the wait `slot` holds, keeping its place in line if it
-    /// is still waiting.
-    fn register(&mut self, slot: &mut Option<u64>, waker: &Waker) {
-        if let Some(entry) = slot.and_then(|id| self.wakers.get_mut(&id)) {
-            entry.clone_from(waker);
-            return;
-        }
-        let id = self.next;
-        self.next += 1;
-        self.wakers.insert(id, waker.clone());
-        *slot = Some(id);
-    }
-
-    fn remove(&mut self, slot: Option<u64>) {
-        if let Some(id) = slot {
-            self.wakers.remove(&id);
-        }
-    }
-
-    /// Every waker, oldest wait first, for waking once the state lock is released.
-    fn take(&mut self) -> Vec<Waker> {
-        std::mem::take(&mut self.wakers).into_values().collect()
-    }
-}
-
-fn wake(wakers: Vec<Waker>) {
-    for waker in wakers {
-        waker.wake();
-    }
 }
 
 /// Everything about the channel except its value. Never held across a switch point or a wake.

@@ -8,6 +8,8 @@ pub mod futures;
 mod join_set;
 pub mod runtime;
 pub mod task;
+#[cfg(any(feature = "sync", feature = "util"))]
+mod waiters;
 #[cfg(feature = "thread-simulator")]
 mod workers;
 mod yields;
