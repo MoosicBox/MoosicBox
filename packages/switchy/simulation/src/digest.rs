@@ -9,6 +9,9 @@
 //! checkpoint each with a short preview, so a mismatch between two runs is located at the
 //! first observation where they part ([`Digest::divergence`]).
 //!
+//! Recording is off until [`enable`] turns it on for a run (simvar does when the run will be
+//! verified), so runs nobody compares pay nothing for it: observing then returns at once.
+//!
 //! `SIMULATOR_DIGEST_BACKTRACE_AT=N` adds a backtrace to observation `N`'s checkpoint, to see
 //! what made a diverging observation.
 
@@ -153,6 +156,25 @@ impl fmt::Write for Hashing {
     }
 }
 
+/// Whether the current run records its digest ([`enable`]).
+#[derive(Default)]
+struct Recording(std::sync::atomic::AtomicBool);
+
+/// Record the current run's digest from now on. Until a run calls this, observing it does
+/// nothing and [`finish`] returns an empty digest.
+pub fn enable() {
+    crate::state::<Recording>()
+        .0
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the current run records its digest.
+#[must_use]
+pub fn enabled() -> bool {
+    crate::existing_state::<Recording>()
+        .is_some_and(|recording| recording.0.load(std::sync::atomic::Ordering::Relaxed))
+}
+
 /// The current run's digest.
 #[derive(Default)]
 struct RunDigest(Mutex<Digest>);
@@ -190,6 +212,9 @@ fn record(source: &str, hashing: Hashing) {
 
 /// Observe `label` with `bytes` in the current run (as `source`).
 pub fn observe(source: &str, label: &str, bytes: &[u8]) {
+    if !enabled() {
+        return;
+    }
     let mut hashing = Hashing::new(label);
     hashing.hash = fnv(hashing.hash, bytes);
     if !bytes.is_empty() {
@@ -202,6 +227,9 @@ pub fn observe(source: &str, label: &str, bytes: &[u8]) {
 /// Observe `label` with `value`'s `Debug` text in the current run (as `source`). The text is
 /// hashed as it is written, so even a large value costs no allocation beyond its preview.
 pub fn observe_debug(source: &str, label: &str, value: &impl fmt::Debug) {
+    if !enabled() {
+        return;
+    }
     let mut hashing = Hashing::new(label);
     hashing.preview(": ");
     let _ = write!(hashing, "{value:?}");
@@ -224,10 +252,13 @@ pub fn on_run_end(name: &'static str, observer: EndObserver) {
     lock(&END_OBSERVERS).insert(name, observer);
 }
 
-/// End the current run's digest: the end-of-run observers and every named random stream's
+/// End the current run's digest (empty unless [`enable`]d): the end-of-run observers and every named random stream's
 /// final state observe it, and it is taken from the run (which starts a new one).
 #[must_use]
 pub fn finish() -> Digest {
+    if !enabled() {
+        return Digest::default();
+    }
     let observers: Vec<EndObserver> = lock(&END_OBSERVERS).values().copied().collect();
     for observer in observers {
         observer();
@@ -427,6 +458,7 @@ mod tests {
 
     fn digest_of(f: impl FnOnce()) -> Digest {
         with_context(Context::new(1), || {
+            enable();
             f();
             finish()
         })
@@ -509,6 +541,16 @@ mod tests {
         assert!(report.contains("1500: 1500"), "{report}");
         assert!(report.contains("1500: 7"), "{report}");
         assert!(report.contains('…'), "{report}");
+    }
+
+    #[test]
+    fn a_run_that_never_enabled_its_digest_records_nothing() {
+        let digest = with_context(Context::new(1), || {
+            observe("x", "one", b"");
+            let _ = crate::stream("s").lock().unwrap().next_u64();
+            finish()
+        });
+        assert_eq!(digest, Digest::default());
     }
 
     #[test]

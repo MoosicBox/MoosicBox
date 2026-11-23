@@ -1130,6 +1130,10 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         switchy::time::simulator::reset_step_multiplier();
         reset_simulator_cancellation_token();
         reset_step();
+        // Only a run something compares records what it observed; others pay nothing for it.
+        if records_digest() {
+            switchy::simulation::digest::enable();
+        }
 
         self.bootstrap.init();
 
@@ -1467,6 +1471,14 @@ fn verify_mode() -> Verify {
             panic!("SIMULATOR_VERIFY_DETERMINISM must be 1, true or process, got '{other}'")
         }
     }
+}
+
+/// Whether runs record their digest: when they are verified, or report it to the process
+/// verifying them (`SIMULATOR_DIGEST_OUT`). Tests always record.
+fn records_digest() -> bool {
+    cfg!(test)
+        || verify_mode() != Verify::Off
+        || std::env::var_os("SIMULATOR_DIGEST_OUT").is_some()
 }
 
 /// What a replay of a run observed.
