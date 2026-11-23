@@ -765,13 +765,17 @@ fn a_killed_thread_waiting_on_another_victims_lock_finishes_unwinding() {
             let (first_lock, first_unwound) = (Arc::clone(&lock), Arc::clone(&unwound));
             let held = Arc::new(AtomicUsize::new(0));
             let first_started = Arc::clone(&held);
+            // The victims wait for messages that never come, not for a deadline: the run's
+            // clock may move past any deadline before the kill (a seed's step multiplier).
+            let (_first_wake, first_wait) = mpsc::channel::<()>();
+            let (_second_wake, second_wait) = mpsc::channel::<()>();
             // Killed first: its destructor needs the lock the second victim holds.
             let first = thread::Builder::new()
                 .group(group)
                 .spawn(move || {
                     let _blocker = LockOnDrop(first_lock, first_unwound);
                     first_started.fetch_add(1, Ordering::SeqCst);
-                    thread::sleep(Duration::from_secs(3600));
+                    let _ = first_wait.recv();
                 })
                 .unwrap();
             let second_lock = Arc::clone(&lock);
@@ -781,7 +785,7 @@ fn a_killed_thread_waiting_on_another_victims_lock_finishes_unwinding() {
                 .spawn(move || {
                     let _guard = second_lock.lock().unwrap();
                     second_held.fetch_add(1, Ordering::SeqCst);
-                    thread::sleep(Duration::from_secs(3600));
+                    let _ = second_wait.recv();
                 })
                 .unwrap();
             while held.load(Ordering::SeqCst) < 2 {
