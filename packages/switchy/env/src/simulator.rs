@@ -4,8 +4,14 @@
 //! for testing. It maintains its own set of environment variables separate from
 //! the system environment, allowing for controlled and reproducible tests.
 //!
-//! The simulator automatically initializes with real environment variables and
+//! Outside a simulation run, the simulator starts from the real environment variables and
 //! adds simulator-specific defaults for common configuration values.
+//!
+//! Inside a run ([`switchy_simulation::in_run`]) the environment is sealed: each run gets its
+//! own, holding only the host's `SIMULATOR_*` variables, those the simulation passes through
+//! ([`pass_through`]), and the defaults, unless the run chose its variables with [`isolate`].
+//! A run then reads the same environment wherever it executes, and runs never see each
+//! other's changes.
 //!
 //! # Examples
 //!
@@ -33,6 +39,37 @@ use std::sync::{Arc, RwLock};
 /// Simulator environment provider with configurable variables
 pub struct SimulatorEnv {
     vars: Arc<RwLock<BTreeMap<String, String>>>,
+    /// The variables [`SimulatorEnv::reset`] starts again from (before the defaults).
+    base: fn() -> BTreeMap<String, String>,
+}
+
+/// Every variable of the host.
+fn host_vars() -> BTreeMap<String, String> {
+    std::env::vars().collect()
+}
+
+/// The host's variables a sealed run may see: `SIMULATOR_*`, and those passed through.
+fn sealed_vars() -> BTreeMap<String, String> {
+    let passed = PASSED_THROUGH
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    std::env::vars()
+        .filter(|(name, _)| name.starts_with("SIMULATOR_") || passed.contains(name))
+        .collect()
+}
+
+/// Host variables runs may read besides `SIMULATOR_*` ([`pass_through`]).
+static PASSED_THROUGH: RwLock<std::collections::BTreeSet<String>> =
+    RwLock::new(std::collections::BTreeSet::new());
+
+/// Let simulation runs read these host variables (besides `SIMULATOR_*`, which they always
+/// may). Call it before runs start; a sealed run reads the host's values when it first reads
+/// its environment.
+pub fn pass_through<S: Into<String>>(names: impl IntoIterator<Item = S>) {
+    PASSED_THROUGH
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .extend(names.into_iter().map(Into::into));
 }
 
 impl SimulatorEnv {
@@ -42,18 +79,16 @@ impl SimulatorEnv {
     /// simulator-specific defaults for testing and deterministic behavior.
     #[must_use]
     pub fn new() -> Self {
-        let mut vars = BTreeMap::new();
+        Self::from_base(host_vars)
+    }
 
-        // Load real environment variables as defaults
-        for (key, value) in std::env::vars() {
-            vars.insert(key, value);
-        }
-
-        // Override with simulator-specific defaults
+    /// An environment of `base`'s variables plus the simulator defaults.
+    fn from_base(base: fn() -> BTreeMap<String, String>) -> Self {
+        let mut vars = base();
         Self::set_simulator_defaults(&mut vars);
-
         Self {
             vars: Arc::new(RwLock::new(vars)),
+            base,
         }
     }
 
@@ -96,10 +131,8 @@ impl SimulatorEnv {
         let mut vars = self.vars.write().unwrap();
         vars.clear();
 
-        // Reload real environment variables
-        for (key, value) in std::env::vars() {
-            vars.insert(key, value);
-        }
+        // Reload the variables this environment starts from
+        vars.extend((self.base)());
         drop(vars);
 
         // Reacquire lock for setting defaults
@@ -195,15 +228,30 @@ static PROVIDER: std::sync::LazyLock<Arc<SimulatorEnv>> =
 /// The current simulation run's own environment, when [`isolate`] gave it one.
 struct Isolated(RwLock<Option<Arc<SimulatorEnv>>>);
 
+/// A simulation run's sealed environment, made on its first read.
+struct Sealed(Arc<SimulatorEnv>);
+
 /// The provider this thread reads: its simulation run's isolated environment if the run has
-/// one, the process-wide simulated environment otherwise.
+/// one, else the run's sealed environment, and outside a run the process-wide simulated
+/// environment.
 fn provider() -> Arc<SimulatorEnv> {
-    switchy_simulation::state_with(|| Isolated(RwLock::new(None)))
+    let isolated = switchy_simulation::state_with(|| Isolated(RwLock::new(None)))
         .0
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone()
-        .unwrap_or_else(|| Arc::clone(&PROVIDER))
+        .clone();
+    isolated.unwrap_or_else(|| {
+        if switchy_simulation::in_run() {
+            Arc::clone(
+                &switchy_simulation::state_with(|| {
+                    Sealed(Arc::new(SimulatorEnv::from_base(sealed_vars)))
+                })
+                .0,
+            )
+        } else {
+            Arc::clone(&PROVIDER)
+        }
+    })
 }
 
 /// Give the current simulation run (its `switchy_simulation` context) an environment of its
@@ -215,6 +263,7 @@ fn provider() -> Arc<SimulatorEnv> {
 pub fn isolate(vars: impl IntoIterator<Item = (String, String)>) {
     let env = SimulatorEnv {
         vars: Arc::new(RwLock::new(vars.into_iter().collect())),
+        base: BTreeMap::new,
     };
     *switchy_simulation::state_with(|| Isolated(RwLock::new(None)))
         .0
@@ -714,7 +763,10 @@ mod tests {
         // SimulatorEnv uses Arc<RwLock<...>> internally, so cloned instances share state
         let env1 = SimulatorEnv::new();
         let vars_clone = env1.vars.clone();
-        let env2 = SimulatorEnv { vars: vars_clone };
+        let env2 = SimulatorEnv {
+            vars: vars_clone,
+            base: host_vars,
+        };
 
         // Set a variable through env1
         env1.set_var("SHARED_VAR", "from_env1");
@@ -777,7 +829,10 @@ mod tests {
             for i in 0..4 {
                 let vars_clone = vars.clone();
                 let handle = thread::spawn(move || {
-                    let env = SimulatorEnv { vars: vars_clone };
+                    let env = SimulatorEnv {
+            vars: vars_clone,
+            base: host_vars,
+        };
                     for _ in 0..100 {
                         // Read operations
                         let _ = env.var("PORT");
@@ -792,7 +847,10 @@ mod tests {
             // Spawn a writer thread
             let vars_clone = vars.clone();
             let writer = thread::spawn(move || {
-                let env = SimulatorEnv { vars: vars_clone };
+                let env = SimulatorEnv {
+            vars: vars_clone,
+            base: host_vars,
+        };
                 for j in 0..100 {
                     env.set_var("CONCURRENT_VAR", &format!("value_{j}"));
                 }
@@ -805,7 +863,10 @@ mod tests {
             writer.join().expect("Writer thread panicked");
 
             // Final state should be consistent
-            let env = SimulatorEnv { vars };
+            let env = SimulatorEnv {
+                vars,
+                base: host_vars,
+            };
             assert!(env.var("CONCURRENT_VAR").is_ok());
         }
     }
@@ -883,5 +944,49 @@ mod tests {
         switchy_simulation::with_context(first, || {
             assert_eq!(var("ONLY_FIRST").unwrap(), "1");
         });
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn runs_are_sealed_from_the_hosts_environment() {
+        // SAFETY: serial; no other thread of this test reads the environment meanwhile.
+        unsafe {
+            std::env::set_var("SWITCHY_ENV_SEALED_HOST", "host");
+            std::env::set_var("SWITCHY_ENV_SEALED_PASSED", "passed");
+            std::env::set_var("SIMULATOR_SEALED_KNOB", "knob");
+        }
+        pass_through(["SWITCHY_ENV_SEALED_PASSED"]);
+        let run = switchy_simulation::Context::new(1);
+        run.begin_run();
+        switchy_simulation::with_context(Arc::clone(&run), || {
+            assert!(var("SWITCHY_ENV_SEALED_HOST").is_err(), "a run cannot read the host");
+            assert_eq!(var("SWITCHY_ENV_SEALED_PASSED").unwrap(), "passed");
+            assert_eq!(var("SIMULATOR_SEALED_KNOB").unwrap(), "knob");
+            assert_eq!(var("PORT").unwrap(), "8080", "the defaults are there");
+            set_var("SWITCHY_ENV_SEALED_WRITTEN", "run");
+            reset();
+            assert!(var("SWITCHY_ENV_SEALED_WRITTEN").is_err());
+            assert!(var("SWITCHY_ENV_SEALED_HOST").is_err(), "a reset stays sealed");
+            set_var("SWITCHY_ENV_SEALED_WRITTEN", "run");
+        });
+        let other = switchy_simulation::Context::new(2);
+        other.begin_run();
+        switchy_simulation::with_context(other, || {
+            assert!(var("SWITCHY_ENV_SEALED_WRITTEN").is_err(), "runs are separate");
+        });
+        // Outside a run, the host's environment.
+        std::thread::spawn(|| {
+            assert!(var("SWITCHY_ENV_SEALED_WRITTEN").is_err());
+            // The process-wide environment read the host before this test set its variable.
+            reset();
+            assert_eq!(var("SWITCHY_ENV_SEALED_HOST").unwrap(), "host");
+        })
+        .join()
+        .unwrap();
+        unsafe {
+            std::env::remove_var("SWITCHY_ENV_SEALED_HOST");
+            std::env::remove_var("SWITCHY_ENV_SEALED_PASSED");
+            std::env::remove_var("SIMULATOR_SEALED_KNOB");
+        }
     }
 }
