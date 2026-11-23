@@ -6,9 +6,19 @@ import sys
 import tempfile
 import threading
 import time
+from pathlib import PurePosixPath, PureWindowsPath
 from unittest.mock import patch
 
 import qualification_matrix as matrix
+
+
+class SourceIdentityTests(unittest.TestCase):
+    def test_paths_use_same_case_sensitive_order_and_bytes_on_all_hosts(self):
+        for root in (PurePosixPath('/repo'), PureWindowsPath('C:/repo')):
+            keys = sorted(matrix._source_key(root / name, root)
+                          for name in ('pkg/src/A.rs', 'pkg/Cargo.toml', 'pkg/a.rs'))
+            self.assertEqual(['/'.join(key) for key in keys],
+                             ['pkg/Cargo.toml', 'pkg/a.rs', 'pkg/src/A.rs'])
 
 
 class Codec:

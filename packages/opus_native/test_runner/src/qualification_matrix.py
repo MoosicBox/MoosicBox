@@ -782,6 +782,11 @@ def adversarial(native_executable, cases):
     )
 
 
+def _source_key(path, workspace):
+    # Sort by case-sensitive components (POSIX Path ordering), even on Windows.
+    return path.relative_to(workspace).parts
+
+
 def native_source_identity():
     root = Path(__file__).resolve().parents[2]
     h = hashlib.sha256()
@@ -795,9 +800,10 @@ def native_source_identity():
             root / "test_runner" / "Cargo.toml",
             workspace / "Cargo.toml",
             workspace / "Cargo.lock",
-        ]
+        ],
+        key=lambda path: _source_key(path, workspace),
     ):
-        h.update(str(path.relative_to(workspace)).encode() + b"\0")
+        h.update("/".join(_source_key(path, workspace)).encode() + b"\0")
         h.update(path.read_bytes())
     return h.hexdigest()
 

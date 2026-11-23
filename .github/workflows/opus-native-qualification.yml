@@ -67,7 +67,7 @@ jobs:
                   cargo fetch --locked
             - name: Provision player test decoder
               shell: bash
-              run: |
+              run: &provision-player-decoder |
                   if ! command -v ffmpeg >/dev/null; then
                     case "$RUNNER_OS" in
                       Linux) sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg ;;
@@ -135,6 +135,10 @@ jobs:
                   ninja --version
             - name: Explicit locked dependency provisioning (network only here)
               run: cargo fetch --locked
+            - name: Provision core player test decoder
+              if: matrix.shard == 'core'
+              shell: bash
+              run: *provision-player-decoder
             - name: Explicit fixed-point oracle, frozen expectations and strict media qualification
               env:
                   MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL || format('https://raw.githubusercontent.com/{0}/{1}/packages/opus_native/test_runner/fixtures/music-carefree-30s.wav', github.repository, github.sha) }}
