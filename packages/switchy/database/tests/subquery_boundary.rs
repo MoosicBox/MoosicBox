@@ -29,7 +29,7 @@ async fn sqlx_subquery_inputs_are_identifiers_not_sql() {
         .await
         .unwrap();
     let db = switchy_database::sqlx::sqlite::SqliteSqlxDatabase::new(Arc::new(
-        tokio::sync::Mutex::new(pool),
+        switchy_async::sync::Mutex::new(pool),
     ));
     assert_subquery_boundary(&db).await;
     db.close().await.unwrap();

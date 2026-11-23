@@ -22,10 +22,8 @@ use switchy_async::task::JoinError;
 use switchy_async::util::CancellationToken;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
-use tokio::{
-    fs::{self, DirEntry},
-    sync::RwLock,
-};
+use switchy_async::sync::RwLock;
+use tokio::fs::{self, DirEntry};
 
 use crate::{
     CACHE_DIR, Scanner,

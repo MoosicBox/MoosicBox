@@ -34,7 +34,7 @@ use switchy_async::runtime::Handle;
 use switchy_async::sync::Mutex;
 use switchy_async::task::JoinError;
 use thiserror::Error;
-use tokio::sync::OwnedMutexGuard;
+use switchy_async::sync::OwnedMutexGuard;
 
 #[cfg(feature = "raw-sql")]
 use crate::query_transform::{QuestionMarkHandler, transform_query_for_params};

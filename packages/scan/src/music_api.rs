@@ -13,7 +13,8 @@ use moosicbox_paging::PagingRequest;
 use switchy_async::util::CancellationToken;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
-use tokio::{select, sync::RwLock};
+use switchy_async::sync::RwLock;
+use tokio::select;
 
 use crate::{
     Scanner,
