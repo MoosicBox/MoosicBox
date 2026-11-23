@@ -7,7 +7,7 @@ use std::{
     future::Future,
     pin::Pin,
     sync::{
-        Arc, LazyLock, Mutex, PoisonError, Weak,
+        Arc, Mutex, PoisonError, Weak,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     task::{Context, Poll, Wake, Waker},
@@ -44,7 +44,7 @@ impl LocalFutureProxy {
         future: impl Future<Output = T> + 'static,
         sender: futures::channel::oneshot::Sender<T>,
     ) -> Self {
-        let id = TASK_ID.fetch_add(1, Ordering::SeqCst);
+        let id = next_task_id();
 
         let wrapped_future = async move {
             let result = future.await;
@@ -109,11 +109,14 @@ type Registry = Arc<Mutex<BTreeMap<u64, Weak<Task>>>>;
 /// Tasks woken late (see `faults`), each with the steps it still waits, in the order woken.
 type Late = Arc<Mutex<Vec<(u64, Arc<Task>)>>>;
 
-// Process-wide, so started elsewhere when perturbed (see `switchy_simulation::counter_start`).
-static RUNTIME_ID: LazyLock<AtomicU64> =
-    LazyLock::new(|| AtomicU64::new(switchy_simulation::counter_start()));
-static TASK_ID: LazyLock<AtomicU64> =
-    LazyLock::new(|| AtomicU64::new(switchy_simulation::counter_start()));
+/// Runtime and task identifiers: per run inside a simulation run, so they never depend on
+/// what ran before (see `switchy_simulation::next_id`).
+struct RuntimeIds;
+struct TaskIds;
+
+fn next_task_id() -> u64 {
+    switchy_simulation::next_id::<TaskIds>()
+}
 
 /// A handle to a simulator runtime that provides task spawning and execution capabilities.
 #[derive(Debug, Clone)]
@@ -129,7 +132,7 @@ impl Handle {
     /// together with the runtime's other tasks on the calling thread, as a multi-thread tokio
     /// runtime does.
     pub fn block_on<F: Future>(&self, f: F) -> F::Output {
-        if Runtime::current().is_some_and(|current| current.id == self.runtime.id) {
+        if Runtime::current().is_some_and(|current| current == *self.runtime) {
             return self.runtime.block_on_nested(f);
         }
         self.runtime.block_on(f)
@@ -335,8 +338,9 @@ impl Default for Runtime {
 }
 
 impl PartialEq for Runtime {
+    /// The same runtime (identifiers are only unique within a run).
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        Arc::ptr_eq(&self.registry, &other.registry)
     }
 }
 
@@ -390,7 +394,7 @@ impl Runtime {
         let queue = Arc::new(Mutex::new(vec![]));
 
         let mut this = Self {
-            id: RUNTIME_ID.fetch_add(1, Ordering::SeqCst),
+            id: switchy_simulation::next_id::<RuntimeIds>(),
             spawner: Spawner {
                 queue: queue.clone(),
             },
@@ -696,7 +700,7 @@ impl Runtime {
     /// * If called from within one of this runtime's own tasks
     pub fn shutdown_now(&self) {
         assert!(
-            !(RUNTIME.is_set() && RUNTIME.with(|current| current.id == self.id)),
+            !(RUNTIME.is_set() && RUNTIME.with(|current| current == self)),
             "Cannot shut a Runtime down from within one of its tasks"
         );
         log::debug!("shutdown_now: runtime {}", self.id);
@@ -1266,7 +1270,7 @@ impl Task {
         runtime.tasks.fetch_add(1, Ordering::SeqCst);
         let registry = Arc::clone(&runtime.registry);
         let task = Arc::new(Self {
-            id: TASK_ID.fetch_add(1, Ordering::SeqCst),
+            id: next_task_id(),
             runtime,
             future: Mutex::new(Box::pin(future)),
             finished: AtomicBool::new(false),

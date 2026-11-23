@@ -1908,6 +1908,7 @@ pub fn run<R>(seed: u64, f: impl FnOnce() -> R) -> Outcome<R> {
 }
 
 fn run_in<R>(context: Arc<Context>, f: impl FnOnce() -> R) -> Outcome<R> {
+    context.begin_run();
     switchy_simulation::with_context(context, || {
         let scheduler = scheduler();
         let result = std::panic::catch_unwind(AssertUnwindSafe(f));
@@ -1926,14 +1927,9 @@ pub(crate) fn touch(object: Object, write: bool) {
 /// A unique key for a synchronization object's waits, such as [`WaitKey::Io`].
 #[must_use]
 pub fn new_key() -> u64 {
-    use std::sync::{
-        LazyLock,
-        atomic::{AtomicU64, Ordering},
-    };
-    // Process-wide, so started elsewhere when perturbed (see `switchy_simulation::counter_start`).
-    static NEXT: LazyLock<AtomicU64> =
-        LazyLock::new(|| AtomicU64::new(switchy_simulation::counter_start()));
-    NEXT.fetch_add(1, Ordering::Relaxed)
+    // Per run inside a simulation run, so keys never depend on what ran before.
+    struct Keys;
+    switchy_simulation::next_id::<Keys>()
 }
 
 /// The deadline `timeout` from now on the run's clock, or `None` if it overflows.

@@ -81,6 +81,7 @@ pub struct Context {
     seed: Mutex<u64>,
     streams: Mutex<BTreeMap<String, Arc<Mutex<Rng>>>>,
     slots: Mutex<BTreeMap<TypeId, Slot>>,
+    run: std::sync::atomic::AtomicBool,
 }
 
 impl std::fmt::Debug for Context {
@@ -101,7 +102,21 @@ impl Context {
             seed: Mutex::new(seed),
             streams: Mutex::new(BTreeMap::new()),
             slots: Mutex::new(BTreeMap::new()),
+            run: std::sync::atomic::AtomicBool::new(false),
         })
+    }
+
+    /// Mark this context as a simulation run's (simvar does, as each run starts). Code that
+    /// must not run outside a run (the simulators' sources of randomness, say) checks
+    /// [`in_run`].
+    pub fn begin_run(&self) {
+        self.run.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether this context is a simulation run's ([`Context::begin_run`]).
+    #[must_use]
+    pub fn is_run(&self) -> bool {
+        self.run.load(Ordering::Relaxed)
     }
 
     /// A process-unique identifier of this context.
@@ -207,12 +222,53 @@ thread_local! {
     static CURRENT: RefCell<Option<Arc<Context>>> = const { RefCell::new(None) };
 }
 
+/// Whether threads must be given a context before they reach the simulators
+/// ([`require_contexts`]).
+static CONTEXTS_REQUIRED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// From now on, a thread that reaches the simulators without having been given a context
+/// ([`set_current`], [`with_context`]) panics, instead of quietly getting a fresh context of
+/// its own.
+///
+/// Simulation harnesses (simvar) call this as a simulation starts, after giving their own
+/// threads contexts. Every thread taking part in a run is then one the run knows: a simulated
+/// thread (`switchy_thread`), which shares its run's context. A thread started any other way
+/// (`std::thread::spawn` in simulated code, or a dependency's thread pool) is outside the
+/// run's scheduler, clock and seed, and is reported at its first simulator call.
+pub fn require_contexts() {
+    CONTEXTS_REQUIRED.store(true, Ordering::Relaxed);
+}
+
+/// Whether the current thread has a context (given, or made by an earlier [`current`]).
+#[must_use]
+pub fn has_current() -> bool {
+    CURRENT.with_borrow(Option::is_some)
+}
+
 /// The current thread's context, creating a fresh one seeded with [`initial_seed`] if the
 /// thread has none yet.
+///
+/// # Panics
+///
+/// * If the thread has no context and [`require_contexts`] was called: the thread was not
+///   started through the simulators (a `std::thread::spawn`, say)
 #[must_use]
 pub fn current() -> Arc<Context> {
     CURRENT.with_borrow_mut(|current| {
-        Arc::clone(current.get_or_insert_with(|| Context::new(initial_seed())))
+        if let Some(context) = current {
+            return Arc::clone(context);
+        }
+        assert!(
+            !CONTEXTS_REQUIRED.load(Ordering::Relaxed),
+            "thread {:?} reached a switchy simulator, but no simulation run knows it: it was \
+             started outside the simulation's scheduler (std::thread::spawn, or a \
+             dependency's thread pool), so its clock, randomness and schedule are no run's. \
+             Start it with switchy_thread (or switchy_async), or keep it off simulated code. \
+             RUST_BACKTRACE=1 shows where it reached the simulator.",
+            std::thread::current().name().unwrap_or("<unnamed>")
+        );
+        Arc::clone(current.insert(Context::new(initial_seed())))
     })
 }
 
@@ -235,6 +291,52 @@ pub fn with_context<R>(context: Arc<Context>, f: impl FnOnce() -> R) -> R {
     let _restore = Restore(set_current(Some(context)));
     f()
 }
+
+/// Mark the current thread's context as a simulation run's; see [`Context::begin_run`].
+pub fn begin_run() {
+    current().begin_run();
+}
+
+/// Whether the current thread is taking part in a simulation run: its context was marked
+/// with [`begin_run`] (simulated threads share their run's context). Never creates a context.
+#[must_use]
+pub fn in_run() -> bool {
+    CURRENT.with_borrow(|current| current.as_ref().is_some_and(|context| context.is_run()))
+}
+
+/// The next identifiers of kind `K`, per run.
+struct Ids<K>(AtomicU64, std::marker::PhantomData<fn() -> K>);
+
+/// Where identifiers handed out outside a run start: far beyond what a run counts to, so the
+/// two never meet.
+const OUTSIDE_RUNS: u64 = 1 << 48;
+
+/// A fresh identifier of kind `K` (a task, a runtime, a lock, ...), unique among its kind's.
+///
+/// Inside a simulation run ([`in_run`]) identifiers are counted per run from 1, so a run's
+/// identifiers never depend on what ran before it in the process, or beside it. Outside a run
+/// they come from a process-wide counter in a range of its own, started elsewhere when
+/// perturbed ([`counter_start`]).
+#[must_use]
+pub fn next_id<K: Any>() -> u64 {
+    if in_run() {
+        return current()
+            .state_with(|| Ids::<K>(AtomicU64::new(1), std::marker::PhantomData))
+            .0
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    let mut outside = lock(&OUTSIDE_IDS);
+    let next = outside
+        .entry(TypeId::of::<K>())
+        .or_insert_with(|| OUTSIDE_RUNS + counter_start());
+    let id = *next;
+    *next += 1;
+    drop(outside);
+    id
+}
+
+/// The next identifier of each kind handed out outside a run ([`next_id`]).
+static OUTSIDE_IDS: Mutex<BTreeMap<TypeId, u64>> = Mutex::new(BTreeMap::new());
 
 /// This run's value of `T`; see [`Context::state`].
 #[must_use]
@@ -391,6 +493,75 @@ mod tests {
             assert_eq!(seed(), 42);
         });
         assert_eq!(current().id(), outer.id());
+    }
+
+    #[test]
+    fn required_contexts_reject_unknown_threads() {
+        // Process-wide: other tests' threads all start with contexts or never reach here
+        // after it is set, so it is checked in a child process.
+        if std::env::var_os("SWITCHY_SIMULATION_REQUIRE_CONTEXTS_CHILD").is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "tests::required_contexts_reject_unknown_threads"])
+                .env("SWITCHY_SIMULATION_REQUIRE_CONTEXTS_CHILD", "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+            return;
+        }
+        let given = Context::new(3);
+        set_current(Some(Arc::clone(&given)));
+        require_contexts();
+        assert_eq!(current().id(), given.id(), "a thread with a context keeps it");
+        let shared = Arc::clone(&given);
+        std::thread::spawn(move || with_context(shared, || current().seed()))
+            .join()
+            .unwrap();
+        let unknown = std::thread::spawn(|| current().seed()).join();
+        assert!(unknown.is_err(), "a thread nobody gave a context panics");
+    }
+
+    #[test]
+    fn identifiers_are_counted_per_run() {
+        struct Kind;
+        struct Other;
+        std::thread::spawn(|| {
+            let outside = next_id::<Kind>();
+            assert!(outside >= OUTSIDE_RUNS);
+            assert_eq!(next_id::<Kind>(), outside + 1);
+            for seed in [1, 2] {
+                let run = Context::new(seed);
+                run.begin_run();
+                with_context(run, || {
+                    assert_eq!(next_id::<Kind>(), 1, "each run counts from 1");
+                    assert_eq!(next_id::<Kind>(), 2);
+                    assert_eq!(next_id::<Other>(), 1, "kinds count separately");
+                });
+            }
+            assert_eq!(next_id::<Kind>(), outside + 2);
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn only_a_marked_context_is_a_run() {
+        std::thread::spawn(|| {
+            assert!(!in_run(), "a thread without a context is in no run");
+            let run = Context::new(7);
+            with_context(Arc::clone(&run), || {
+                assert!(!in_run());
+                begin_run();
+                assert!(in_run());
+            });
+            assert!(!in_run(), "the run ends with its context");
+            with_context(run, || assert!(in_run(), "a run's threads share its context"));
+        })
+        .join()
+        .unwrap();
     }
 
     #[test]

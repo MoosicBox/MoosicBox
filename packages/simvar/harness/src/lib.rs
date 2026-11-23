@@ -317,6 +317,17 @@ pub fn run_simulation<B: SimBootstrap>(
     // claim thread_id 1 for main thread
     let _ = thread_id();
 
+    // Every thread reaching the simulators from here on must be one the simulation started:
+    // this one and the run workers get contexts of their own, and a run's threads share its
+    // run's. Any other thread (a `std::thread::spawn` in simulated code) panics at its first
+    // simulator call (see `switchy_simulation::require_contexts`).
+    if !switchy::simulation::has_current() {
+        switchy::simulation::set_current(Some(switchy::simulation::Context::new(
+            switchy::simulation::initial_seed(),
+        )));
+    }
+    switchy::simulation::require_contexts();
+
     ctrlc::set_handler(ctrl_c).expect("Error setting Ctrl-C handler");
 
     #[cfg(feature = "pretty_env_logger")]
@@ -640,6 +651,11 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
                 released: false,
             };
             let _ = thread_id();
+            // A harness thread: given a context, as `switchy_simulation::require_contexts`
+            // requires (each run then replaces it with its own).
+            switchy::simulation::set_current(Some(switchy::simulation::Context::new(
+                switchy::simulation::initial_seed(),
+            )));
             let thread_id = worker_thread_id();
             let slot = worker.slot;
             let control = Arc::clone(&worker.control);
@@ -1078,7 +1094,14 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
     ) -> RunOutcome {
         // Each run starts from a fresh simulation context, so nothing of an earlier run on
         // this worker thread (simulated threads, clock, generator) carries over.
-        switchy::simulation::set_current(None);
+        // A fresh context, made explicitly (see `switchy_simulation::require_contexts`). The
+        // thread keeps it after the run: the harness reads the run's state (its epoch offset,
+        // trace) once `run_once` returns.
+        switchy::simulation::set_current(Some(switchy::simulation::Context::new(
+            switchy::simulation::initial_seed(),
+        )));
+        // Code that must only run inside a run (the simulators' randomness) checks this.
+        switchy::simulation::begin_run();
         // A panic recorded by an earlier run on this thread is not this run's.
         PANIC.with_borrow_mut(|panic| *panic = None);
         match replay {
