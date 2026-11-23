@@ -103,7 +103,16 @@ By default, the `all` feature is enabled. Individual features can be selected:
 - **`SIMULATOR_ON_FAILURE`**: `stop` (default) ends the simulation at the first
   failed run; `continue` records and reports it and keeps starting runs
 - **`SIMULATOR_SEED`**: The first run's seed (default random)
-- **`SIMULATOR_VERIFY_DETERMINISM`**: `1` replays every run and fails if its trace differs
+- **`SIMULATOR_VERIFY_DETERMINISM`**: replay every run and fail if the replay
+  observed anything differently: the thread schedule, processes and terminal output,
+  the final file tree, random draws, the clock and `record`ed values (each switchy
+  simulator reports to the run's digest; see `switchy_simulation::digest`). `1`
+  replays in the same process; `process` in a fresh process of the simulation,
+  perturbed (`SIMULATOR_PERTURB`: process-wide counters start elsewhere), which also
+  catches a run depending on what else its process ran. A failure names the first
+  observation that differs
+- **`SIMULATOR_DIGEST_BACKTRACE_AT`**: add a backtrace to this observation of a
+  run's digest
 - **`SIMULATOR_SHRINK`** (`thread` feature): shrink a failing run's thread
   schedule (`1` for up to 1000 replays, or a number) and print how to replay it
 - **`SIMULATOR_SCHEDULE`** (`thread` feature): replay a shrunk schedule

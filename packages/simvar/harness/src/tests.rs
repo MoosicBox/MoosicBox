@@ -589,3 +589,57 @@ fn a_run_whose_clock_is_reconfigured_as_it_starts_still_reports_its_times() {
     assert!(result.run().steps > 0, "{result}");
     assert!(result.run().sim_time_millis > 0, "{result}");
 }
+
+/// Observes how many runs this process made before it: a run that depends on its process's
+/// history, as a cache or counter in a static would make it.
+struct HistoryBootstrap;
+
+static RUNS_BEFORE: AtomicU64 = AtomicU64::new(0);
+
+impl SimBootstrap for HistoryBootstrap {
+    fn on_start(&self, sim: &mut impl Sim) {
+        let before = RUNS_BEFORE.fetch_add(1, Ordering::SeqCst);
+        sim.client("historian", async move {
+            switchy::simulation::observe("test", "runs before", &before.to_le_bytes());
+            simvar_utils::cancel_simulation();
+            Ok(())
+        });
+    }
+}
+
+fn outcome(bootstrap: &impl SimBootstrap, seed: u64) -> crate::RunOutcome {
+    let outcome =
+        Simulation::new(bootstrap).run_once(1, None, Replay::Seed(seed), &RunSpec::fleet(1));
+    switchy::simulation::set_current(None);
+    outcome
+}
+
+fn replayed(outcome: crate::RunOutcome) -> crate::Replayed {
+    crate::Replayed {
+        trace: outcome.trace,
+        digest: outcome.digest,
+        #[cfg(feature = "thread")]
+        schedule: Some(outcome.schedule),
+    }
+}
+
+#[test_log::test]
+fn a_run_that_depends_on_its_process_history_diverges_at_that_observation() {
+    let first = outcome(&HistoryBootstrap, 1);
+    assert_success(&first.result);
+    let again = replayed(outcome(&HistoryBootstrap, 1));
+    let error = crate::divergence(&first, &again).expect("the runs observed differently");
+    assert!(error.contains("non-deterministic simulation"), "{error}");
+    assert!(error.contains("test: 1 observations / 1 (same count"), "{error}");
+    assert!(error.contains("[test] runs before"), "{error}");
+}
+
+#[test_log::test]
+fn the_same_run_replayed_observes_the_same() {
+    let first = outcome(&RetimedBootstrap, 3);
+    assert_success(&first.result);
+    assert!(first.digest.sources.contains_key("time"));
+    assert!(first.digest.sources.contains_key("random"));
+    let again = replayed(outcome(&RetimedBootstrap, 3));
+    assert_eq!(crate::divergence(&first, &again), None);
+}

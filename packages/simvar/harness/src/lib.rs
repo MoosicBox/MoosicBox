@@ -60,7 +60,14 @@
 //! * `SIMULATOR_EPOCH_OFFSET` - Fixed epoch offset override (when `time` feature is enabled)
 //! * `SIMULATOR_EPOCH_MIN` / `SIMULATOR_EPOCH_MAX` - Bounded random epoch offset (inclusive)
 //! * `SIMULATOR_EPOCH_RANGE_PROFILE` - Epoch profile (`low`, `wide`, `full`)
-//! * `SIMULATOR_VERIFY_DETERMINISM` - Replay every run and fail if its trace differs
+//! * `SIMULATOR_VERIFY_DETERMINISM` - Replay every run and fail if it observed anything
+//!   differently (see [`switchy::simulation::digest`]: the schedule, processes and terminal
+//!   output, the file tree, random draws, the clock, [`record`]ed values): `1` or `true`
+//!   replays it in the same process, `process` in a fresh one started with its replay
+//!   variables and `SIMULATOR_PERTURB` (process-wide counters started elsewhere, with its own
+//!   address layout and hash keys), which also catches dependence on what else the process ran
+//! * `SIMULATOR_DIGEST_BACKTRACE_AT` - Add a backtrace to this observation of a run's digest
+//!   (a determinism failure names the first observation that differs)
 //! * `SIMULATOR_SHRINK` - With the `thread` feature: shrink a failing run's thread schedule
 //!   (`1`/`true` for up to 1000 replays, or a number of replays) and print how to replay it
 //! * `NO_TUI` - Disable terminal UI when set (at build or run time); it is also off when stdout is not a terminal
@@ -736,6 +743,8 @@ struct RunOutcome {
     result: SimResult,
     /// The run's trace hash.
     trace: u64,
+    /// Everything the run observed.
+    digest: switchy::simulation::Digest,
     seed: u64,
     /// The thread schedule it followed.
     #[cfg(feature = "thread")]
@@ -869,31 +878,29 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         if !first.result.is_success() {
             return self.shrunk(run_number, thread_id, first, spec);
         }
-        if !verify_determinism() {
+        let replayed = match verify_mode() {
+            Verify::Off => return first.result,
+            Verify::InProcess => {
+                let again = self.run_once(run_number, thread_id, Replay::Seed(first.seed), spec);
+                if !again.result.is_success() {
+                    return again.result;
+                }
+                Replayed {
+                    trace: again.trace,
+                    digest: again.digest,
+                    #[cfg(feature = "thread")]
+                    schedule: Some(again.schedule),
+                }
+            }
+            Verify::Process => match replay_in_fresh_process(&first) {
+                Ok(replayed) => replayed,
+                Err(error) => return failed(first.result, error),
+            },
+        };
+        let Some(error) = divergence(&first, &replayed) else {
             return first.result;
-        }
-        let again = self.run_once(run_number, thread_id, Replay::Seed(first.seed), spec);
-        if !again.result.is_success() {
-            return again.result;
-        }
-        let (result, trace, seed, replayed) = (first.result, first.trace, first.seed, again.trace);
-        if replayed == trace {
-            return result;
-        }
-        let SimResult::Success { props, run } = result else {
-            unreachable!("checked above")
         };
-        let result = SimResult::Fail {
-            props,
-            run,
-            error: Some(format!(
-                "non-deterministic simulation: replaying seed {seed} produced trace {replayed:#018x}, \
-                 not {trace:#018x}"
-            )),
-            panic: None,
-        };
-        logging::log_message(result.to_string());
-        result
+        failed(first.result, error)
     }
 
     /// With `SIMULATOR_SHRINK` (and the `thread` feature), shrink the failed run's thread
@@ -1251,8 +1258,25 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         let (leaked_threads, schedule, coverage) = {
             let report = switchy::thread::simulator::scheduler().shutdown();
             trace = mix(trace, report.trace_hash);
+            switchy::simulation::observe(
+                "thread",
+                "the schedule's trace",
+                &report.trace_hash.to_le_bytes(),
+            );
             (report.leaked, report.schedule, report.coverage)
         };
+        switchy::simulation::observe_debug(
+            "time",
+            "steps, simulated time and the wall clock",
+            &(
+                steps,
+                sim_time_millis,
+                switchy::time::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |since| since.as_millis()),
+            ),
+        );
+        let digest = switchy::simulation::digest::finish();
         let run = SimRunProperties {
             steps,
             real_time_millis,
@@ -1339,6 +1363,22 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         }
 
         let trace = mix(trace, u64::from(result_is_success(&result)));
+        // A replay in a fresh process (`SIMULATOR_VERIFY_DETERMINISM=process`) reports back.
+        if let Some(path) = std::env::var_os("SIMULATOR_DIGEST_OUT") {
+            let mut text = format!(
+                "trace {trace:016x}\nsuccess {}\n",
+                u8::from(result_is_success(&result))
+            );
+            #[cfg(feature = "thread")]
+            {
+                use std::fmt::Write as _;
+                let _ = writeln!(text, "schedule {schedule}");
+            }
+            text.push_str(&digest.to_text());
+            if let Err(e) = std::fs::write(&path, text) {
+                log::error!("cannot write the run's digest to {}: {e}", path.display());
+            }
+        }
         notify(&SimEvent::RunFinished {
             id: run_id,
             seed,
@@ -1351,6 +1391,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         RunOutcome {
             result,
             trace,
+            digest,
             seed,
             #[cfg(feature = "thread")]
             schedule,
@@ -1401,10 +1442,181 @@ pub fn emit(payload: Arc<dyn std::any::Any + Send + Sync>) {
 }
 
 /// Whether each run is replayed to check it is deterministic: `SIMULATOR_VERIFY_DETERMINISM`
-/// set to `1` or `true`.
+/// set to `1`, `true` or `process`.
 #[must_use]
 pub fn verify_determinism() -> bool {
-    std::env::var("SIMULATOR_VERIFY_DETERMINISM").is_ok_and(|v| v == "1" || v == "true")
+    verify_mode() != Verify::Off
+}
+
+/// How runs are checked to be deterministic (`SIMULATOR_VERIFY_DETERMINISM`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Verify {
+    Off,
+    /// Replayed in the same process.
+    InProcess,
+    /// Replayed in a fresh, perturbed process.
+    Process,
+}
+
+fn verify_mode() -> Verify {
+    match std::env::var("SIMULATOR_VERIFY_DETERMINISM").as_deref() {
+        Ok("1" | "true") => Verify::InProcess,
+        Ok("process") => Verify::Process,
+        Ok("" | "0" | "false") | Err(_) => Verify::Off,
+        Ok(other) => {
+            panic!("SIMULATOR_VERIFY_DETERMINISM must be 1, true or process, got '{other}'")
+        }
+    }
+}
+
+/// What a replay of a run observed.
+struct Replayed {
+    trace: u64,
+    digest: switchy::simulation::Digest,
+    /// Its thread schedule (unknown when another process did not report one).
+    #[cfg(feature = "thread")]
+    schedule: Option<switchy::thread::simulator::Schedule>,
+}
+
+/// The successful run `first`, failed with `error`.
+fn failed(first: SimResult, error: String) -> SimResult {
+    let SimResult::Success { props, run } = first else {
+        return first;
+    };
+    let result = SimResult::Fail {
+        props,
+        run,
+        error: Some(error),
+        panic: None,
+    };
+    logging::log_message(result.to_string());
+    result
+}
+
+/// How `replayed` differs from the run `first`, described for a person, or `None`.
+fn divergence(first: &RunOutcome, replayed: &Replayed) -> Option<String> {
+    use std::fmt::Write as _;
+
+    let digest = first.digest.divergence(&replayed.digest);
+    if digest.is_none() && first.trace == replayed.trace {
+        return None;
+    }
+    let mut error = format!(
+        "non-deterministic simulation: a replay of seed {} observed differently",
+        first.seed
+    );
+    if first.trace != replayed.trace {
+        let _ = write!(
+            error,
+            "\ntrace {:#018x}, replayed {:#018x}",
+            first.trace, replayed.trace
+        );
+    }
+    #[cfg(feature = "thread")]
+    if let Some(schedule) = &replayed.schedule
+        && let Some(index) = first
+            .schedule
+            .choices
+            .iter()
+            .zip(&schedule.choices)
+            .position(|(a, b)| a != b)
+            .or_else(|| {
+                (first.schedule.choices.len() != schedule.choices.len())
+                    .then(|| first.schedule.choices.len().min(schedule.choices.len()))
+            })
+    {
+        let _ = write!(
+            error,
+            "\nthe thread schedules part at their non-default choice {index}: this run {:?}, the \
+             replay {:?} (choice point, thread)",
+            first.schedule.choices.get(index),
+            schedule.choices.get(index)
+        );
+    }
+    if let Some(digest) = digest {
+        let _ = write!(error, "\n{digest}");
+    }
+    Some(error)
+}
+
+/// Replay the successful run `first` alone in a fresh process of this program, started with
+/// the run's replay variables and `SIMULATOR_PERTURB`, and read back what it observed.
+fn replay_in_fresh_process(first: &RunOutcome) -> Result<Replayed, String> {
+    use std::sync::atomic::AtomicU64;
+
+    static REPLAYS: AtomicU64 = AtomicU64::new(0);
+
+    let SimResult::Success { props, .. } = &first.result else {
+        return Err("only a successful run is replayed".to_owned());
+    };
+    let program =
+        std::env::current_exe().map_err(|e| format!("cannot find this program to replay: {e}"))?;
+    let out = std::env::temp_dir().join(format!(
+        "simvar-digest-{}-{}.txt",
+        std::process::id(),
+        REPLAYS.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut command = std::process::Command::new(&program);
+    command
+        .env("SIMULATOR_SEED", first.seed.to_string())
+        .env("SIMULATOR_RUNS", "1")
+        .env("SIMULATOR_MAX_PARALLEL", "1")
+        .env("SIMULATOR_ON_FAILURE", "stop")
+        .env("SIMULATOR_PERTURB", "1")
+        .env("SIMULATOR_DIGEST_OUT", &out)
+        .env("NO_TUI", "1")
+        .env_remove("SIMULATOR_VERIFY_DETERMINISM")
+        .env_remove("SIMULATOR_SHRINK");
+    #[cfg(feature = "time")]
+    command.env(
+        "SIMULATOR_EPOCH_OFFSET",
+        props.config.epoch_offset.to_string(),
+    );
+    for (name, value) in &props.extra {
+        if config::is_environment_name(name) {
+            command.env(name, value);
+        }
+    }
+    let output = command
+        .output()
+        .map_err(|e| format!("cannot start {} to replay: {e}", program.display()))?;
+    let text = std::fs::read_to_string(&out);
+    let _ = std::fs::remove_file(&out);
+    let tail = || {
+        let all = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let lines: Vec<&str> = all.lines().collect();
+        lines[lines.len().saturating_sub(40)..].join("\n")
+    };
+    let text = match text {
+        Ok(text) if output.status.success() && text.contains("\nsuccess 1\n") => text,
+        _ => {
+            return Err(format!(
+                "non-deterministic simulation: a replay of seed {} in a fresh process failed \
+                 ({}):\n{}",
+                first.seed,
+                output.status,
+                tail()
+            ));
+        }
+    };
+    let field = |name: &str| {
+        text.lines()
+            .find_map(|line| line.strip_prefix(name)?.strip_prefix(' '))
+            .map(str::to_owned)
+    };
+    let trace = field("trace")
+        .and_then(|t| u64::from_str_radix(&t, 16).ok())
+        .ok_or_else(|| "the replay reported no trace".to_owned())?;
+    Ok(Replayed {
+        trace,
+        digest: switchy::simulation::Digest::from_text(&text)?,
+        #[cfg(feature = "thread")]
+        schedule: field("schedule").and_then(|s| s.parse().ok()),
+    })
 }
 
 /// Whether simulated threads still blocked when a run ends are tolerated:
@@ -1432,6 +1644,7 @@ fn mix(hash: u64, value: u64) -> u64 {
 ///
 /// * If the trace's lock is poisoned
 pub fn record(value: u64) {
+    switchy::simulation::observe("record", "", &value.to_le_bytes());
     let trace = switchy::simulation::state::<RunTrace>();
     let mut hash = trace.0.lock().unwrap();
     *hash = mix(*hash, value);

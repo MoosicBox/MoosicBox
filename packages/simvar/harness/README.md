@@ -232,7 +232,8 @@ faults.
 - `SIMULATOR_EPOCH_OFFSET`: Fixed simulated epoch offset override (time feature)
 - `SIMULATOR_EPOCH_MIN` / `SIMULATOR_EPOCH_MAX`: Inclusive bounded random epoch offset (time feature)
 - `SIMULATOR_EPOCH_RANGE_PROFILE`: Epoch profile `low` | `wide` | `full` (time feature)
-- `SIMULATOR_VERIFY_DETERMINISM`: `1` replays every run with its seed and fails if its trace differs
+- `SIMULATOR_VERIFY_DETERMINISM`: replay every run with its seed and fail if the replay observed anything differently (the run's digest: the thread schedule, processes and terminal output, the final file tree, random draws, the clock and `record`ed values). `1` replays in the same process; `process` in a fresh, perturbed process of the simulation (`SIMULATOR_PERTURB` starts process-wide counters elsewhere), which also catches a run depending on what else its process ran. A failure names the first observation that differs, with the text around the difference
+- `SIMULATOR_DIGEST_BACKTRACE_AT`: add a backtrace to this observation of a run's digest, to see what made it
 - `SIMULATOR_SHRINK` (thread feature): shrink a failing run's thread schedule (`1` for up to 1000 replays, or a number of replays) and print how to replay the result
 - `SIMULATOR_SCHEDULE` (thread feature): replay a thread schedule, as printed by `SIMULATOR_SHRINK`
 - `SIMULATOR_INTERLEAVING_COVERAGE` (thread feature): `1` records each run's interleaving coverage (the ordered pairs of conflicting operations of different simulated threads, by code location; see `switchy_thread`) in its result's `SimRunProperties::coverage`, which `SimBootstrap::on_result` sees, so a guided fleet can keep the inputs whose runs added pairs
