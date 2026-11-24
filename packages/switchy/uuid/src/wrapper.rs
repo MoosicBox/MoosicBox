@@ -1,17 +1,12 @@
-//! UUID wrapper type providing a unified interface across implementations.
-//!
-//! This module provides a `Uuid` wrapper type that abstracts over the underlying
-//! UUID implementation, allowing code to work generically with UUIDs regardless
-//! of whether the simulator or standard uuid crate is being used.
+//! UUID value and compatibility conversions.
 
 use std::fmt;
 use std::str::FromStr;
 
 /// A universally unique identifier (UUID).
 ///
-/// This is a wrapper type around the underlying UUID implementation that provides
-/// a consistent interface regardless of which backend is being used (standard `uuid`
-/// crate or simulator).
+/// Stored in network byte order. The `uuid-compat` feature retains a borrowed
+/// external representation for callers of the const `inner` API.
 ///
 /// # Examples
 ///
@@ -31,13 +26,38 @@ use std::str::FromStr;
 /// assert_eq!(id, parsed);
 /// # }
 /// ```
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
-pub struct Uuid(uuid::Uuid);
+pub struct Uuid(
+    #[cfg(feature = "uuid-compat")] uuid::Uuid,
+    #[cfg(not(feature = "uuid-compat"))] [u8; 16],
+);
 
 impl Uuid {
     /// The number of bytes in a UUID.
     pub const SIZE: usize = 16;
+
+    /// Creates a UUID from the high and low halves in network byte order.
+    #[must_use]
+    pub const fn from_u64_pair(high: u64, low: u64) -> Self {
+        Self::from_u128(((high as u128) << 64) | low as u128)
+    }
+
+    /// Returns the high and low halves in network byte order.
+    #[must_use]
+    pub const fn as_u64_pair(&self) -> (u64, u64) {
+        let (halves, _) = self.as_bytes().as_chunks::<8>();
+        (u64::from_be_bytes(halves[0]), u64::from_be_bytes(halves[1]))
+    }
+
+    /// Builds a version 4 UUID from caller-supplied bytes, without drawing entropy.
+    /// Only the version and RFC variant bits are overwritten.
+    #[must_use]
+    pub const fn from_random_bytes(mut bytes: [u8; 16]) -> Self {
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        Self::from_bytes(bytes)
+    }
 
     /// Creates a UUID from a 128-bit value.
     ///
@@ -50,7 +70,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn from_u128(v: u128) -> Self {
-        Self(uuid::Uuid::from_u128(v))
+        Self::from_bytes(v.to_be_bytes())
     }
 
     /// Creates a UUID from a 128-bit value in little-endian byte order.
@@ -64,7 +84,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn from_u128_le(v: u128) -> Self {
-        Self(uuid::Uuid::from_u128_le(v))
+        Self::from_bytes(v.to_le_bytes())
     }
 
     /// Returns the UUID as a 128-bit value.
@@ -80,7 +100,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn as_u128(&self) -> u128 {
-        self.0.as_u128()
+        u128::from_be_bytes(*self.as_bytes())
     }
 
     /// Returns the UUID as a 128-bit value in little-endian byte order.
@@ -95,7 +115,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn as_u128_le(&self) -> u128 {
-        self.0.to_u128_le()
+        u128::from_le_bytes(*self.as_bytes())
     }
 
     /// Creates a UUID from 16 bytes.
@@ -111,7 +131,9 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn from_bytes(bytes: [u8; 16]) -> Self {
-        Self(uuid::Uuid::from_bytes(bytes))
+        #[cfg(feature = "uuid-compat")]
+        let bytes = uuid::Uuid::from_bytes(bytes);
+        Self(bytes)
     }
 
     /// Creates a UUID from a byte slice.
@@ -130,9 +152,10 @@ impl Uuid {
     /// let uuid = Uuid::from_slice(&bytes).unwrap();
     /// ```
     pub fn from_slice(slice: &[u8]) -> Result<Self, ParseError> {
-        uuid::Uuid::from_slice(slice)
-            .map(Self)
-            .map_err(|e| ParseError(e.to_string()))
+        slice
+            .try_into()
+            .map(Self::from_bytes)
+            .map_err(|_| ParseError("expected 16 bytes".into()))
     }
 
     /// Returns the bytes of the UUID.
@@ -147,7 +170,14 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 16] {
-        self.0.as_bytes()
+        #[cfg(feature = "uuid-compat")]
+        {
+            self.0.as_bytes()
+        }
+        #[cfg(not(feature = "uuid-compat"))]
+        {
+            &self.0
+        }
     }
 
     /// Returns the bytes of the UUID as an owned array.
@@ -163,7 +193,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn into_bytes(self) -> [u8; 16] {
-        *self.0.as_bytes()
+        *self.as_bytes()
     }
 
     /// Creates a nil UUID (all zeros).
@@ -178,7 +208,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn nil() -> Self {
-        Self(uuid::Uuid::nil())
+        Self::from_bytes([0; 16])
     }
 
     /// Returns `true` if this is a nil UUID (all zeros).
@@ -196,7 +226,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn is_nil(&self) -> bool {
-        self.0.is_nil()
+        self.as_u128() == 0
     }
 
     /// Creates a max UUID (all ones).
@@ -214,7 +244,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn max() -> Self {
-        Self(uuid::Uuid::max())
+        Self::from_bytes([0xff; 16])
     }
 
     /// Returns `true` if this is a max UUID (all ones).
@@ -229,7 +259,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn is_max(&self) -> bool {
-        self.0.is_max()
+        self.as_u128() == u128::MAX
     }
 
     /// Returns the version number of the UUID.
@@ -247,7 +277,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub const fn get_version_num(&self) -> usize {
-        self.0.get_version_num()
+        (self.as_bytes()[6] >> 4) as usize
     }
 
     /// Parses a UUID from a string.
@@ -272,9 +302,9 @@ impl Uuid {
     /// let uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
     /// ```
     pub fn parse_str(input: &str) -> Result<Self, ParseError> {
-        uuid::Uuid::parse_str(input)
-            .map(Self)
-            .map_err(|e| ParseError(e.to_string()))
+        crate::text::parse(input)
+            .map(Self::from_bytes)
+            .ok_or_else(|| ParseError("invalid UUID spelling".into()))
     }
 
     /// Returns a reference to the inner `uuid::Uuid`.
@@ -291,6 +321,7 @@ impl Uuid {
     /// let inner: &uuid::Uuid = uuid.inner();
     /// ```
     #[must_use]
+    #[cfg(feature = "uuid-compat")]
     pub const fn inner(&self) -> &uuid::Uuid {
         &self.0
     }
@@ -306,6 +337,7 @@ impl Uuid {
     /// let inner: uuid::Uuid = uuid.into_inner();
     /// ```
     #[must_use]
+    #[cfg(feature = "uuid-compat")]
     pub const fn into_inner(self) -> uuid::Uuid {
         self.0
     }
@@ -321,6 +353,7 @@ impl Uuid {
     /// let wrapped = Uuid::from_inner(inner);
     /// ```
     #[must_use]
+    #[cfg(feature = "uuid-compat")]
     pub const fn from_inner(uuid: uuid::Uuid) -> Self {
         Self(uuid)
     }
@@ -337,7 +370,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub fn hyphenated(&self) -> String {
-        self.0.hyphenated().to_string()
+        self.to_string()
     }
 
     /// Returns the UUID as a simple (non-hyphenated) string.
@@ -352,7 +385,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub fn simple(&self) -> String {
-        self.0.simple().to_string()
+        format!("{:032x}", self.as_u128())
     }
 
     /// Returns the UUID as a URN string.
@@ -367,7 +400,7 @@ impl Uuid {
     /// ```
     #[must_use]
     pub fn urn(&self) -> String {
-        self.0.urn().to_string()
+        format!("urn:uuid:{self}")
     }
 
     /// Returns the UUID as a braced string.
@@ -382,19 +415,25 @@ impl Uuid {
     /// ```
     #[must_use]
     pub fn braced(&self) -> String {
-        self.0.braced().to_string()
+        format!("{{{self}}}")
     }
 }
 
 impl fmt::Debug for Uuid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
+        fmt::Display::fmt(self, f)
     }
 }
 
 impl fmt::Display for Uuid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
+        crate::text::display(self.as_bytes(), f)
+    }
+}
+
+impl std::hash::Hash for Uuid {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(self.as_bytes());
     }
 }
 
@@ -412,12 +451,14 @@ impl Default for Uuid {
     }
 }
 
+#[cfg(feature = "uuid-compat")]
 impl From<uuid::Uuid> for Uuid {
     fn from(uuid: uuid::Uuid) -> Self {
         Self(uuid)
     }
 }
 
+#[cfg(feature = "uuid-compat")]
 impl From<Uuid> for uuid::Uuid {
     fn from(uuid: Uuid) -> Self {
         uuid.0
@@ -454,6 +495,7 @@ impl AsRef<[u8]> for Uuid {
     }
 }
 
+#[cfg(feature = "uuid-compat")]
 impl AsRef<uuid::Uuid> for Uuid {
     fn as_ref(&self) -> &uuid::Uuid {
         &self.0
@@ -484,33 +526,21 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-#[cfg(feature = "serde")]
-mod serde_impl {
-    use super::Uuid;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    impl Serialize for Uuid {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            self.0.serialize(serializer)
-        }
-    }
-
-    impl<'de> Deserialize<'de> for Uuid {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            uuid::Uuid::deserialize(deserializer).map(Self)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wire_halves_and_v4_mask() {
+        let halves = (0x0011_2233_4455_6677, 0xcc99_aabb_ccdd_eeff);
+        let id = Uuid::from_u64_pair(halves.0, halves.1);
+        assert_eq!(id.as_u64_pair(), halves);
+        assert_eq!(id.to_string(), "00112233-4455-6677-cc99-aabbccddeeff");
+        assert_eq!(
+            Uuid::from_random_bytes(*id.as_bytes()).to_string(),
+            "00112233-4455-4677-8c99-aabbccddeeff"
+        );
+    }
 
     #[test]
     fn test_nil() {
@@ -627,6 +657,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "uuid-compat")]
     fn test_from_inner() {
         let inner = uuid::Uuid::nil();
         let wrapped = Uuid::from_inner(inner);

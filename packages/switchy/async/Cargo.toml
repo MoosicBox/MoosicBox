@@ -67,6 +67,8 @@ fail-on-warnings = [
     "switchy_time?/fail-on-warnings",
 ]
 
+owned-driver = []
+
 _any_backend = []
 simulator = [
     "_any_backend",

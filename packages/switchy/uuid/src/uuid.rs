@@ -1,4 +1,4 @@
-//! Random UUID generation using the standard `uuid` crate.
+//! Random UUID generation using operating-system entropy.
 //!
 //! This module provides truly random UUID v4 generation suitable for production use.
 
@@ -10,6 +10,10 @@ use crate::Uuid;
 /// RFC 4122 version 4. Each call generates a unique identifier suitable
 /// for production use.
 ///
+/// # Panics
+///
+/// * If OS entropy is unavailable or intercepted.
+///
 /// # Examples
 ///
 /// ```
@@ -18,13 +22,19 @@ use crate::Uuid;
 /// ```
 #[must_use]
 pub fn new_v4() -> Uuid {
-    Uuid::from_inner(uuid::Uuid::new_v4())
+    let mut bytes = [0; 16];
+    switchy_random::os_fill_bytes(&mut bytes).expect("native UUID generation requires OS entropy");
+    Uuid::from_random_bytes(bytes)
 }
 
 /// Generates a new random UUID v4 as a hyphenated string.
 ///
 /// This is a convenience function that generates a UUID using [`new_v4`] and
 /// converts it to the standard hyphenated string format (8-4-4-4-12).
+///
+/// # Panics
+///
+/// * If OS entropy is unavailable or intercepted.
 ///
 /// # Examples
 ///
@@ -35,7 +45,7 @@ pub fn new_v4() -> Uuid {
 /// ```
 #[must_use]
 pub fn new_v4_string() -> String {
-    uuid::Uuid::new_v4().to_string()
+    new_v4().to_string()
 }
 
 #[cfg(test)]

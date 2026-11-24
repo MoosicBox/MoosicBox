@@ -487,6 +487,33 @@ pub mod sync {
         tempfile::tempfile().map(File)
     }
 
+    /// Atomically replace a native file using private, same-directory staging.
+    ///
+    /// The parent must be trusted not to
+    /// unlink or replace the staging file. Unpublished stages are removed on drop.
+    ///
+    /// The stage is synced before publication; callers needing crash-durable
+    /// directory entries must also sync the parent after this returns.
+    ///
+    /// # Errors
+    ///
+    /// * Returns creation, write, sync or atomic replacement errors without
+    ///   falling back to writing the destination in place.
+    pub fn replace_with_tempfile(path: impl AsRef<Path>, bytes: &[u8]) -> std::io::Result<()> {
+        use std::io::Write as _;
+
+        let path = path.as_ref();
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        let mut stage = tempfile::NamedTempFile::new_in(parent)?;
+        stage.write_all(bytes)?;
+        stage.as_file().sync_all()?;
+        stage.persist(path)?;
+        Ok(())
+    }
+
     /// Create an anonymous temporary file in `dir`.
     ///
     /// # Errors

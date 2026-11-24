@@ -506,6 +506,34 @@ impl_rng!(simulator, simulator::SimulatorRng);
 #[cfg(all(not(feature = "simulator"), feature = "rand"))]
 impl_rng!(rand, rand::RandRng);
 
+/// Fill `dest` directly from the operating system, never from a seeded stream.
+///
+/// This is an explicit native capability, even when the `simulator` feature is
+/// also enabled. Do not use it for values that must replay in simulation.
+///
+/// # Errors
+///
+/// * Returns `Unsupported` in a custom-backend build, before touching `dest`.
+/// * Returns the OS entropy error without falling back to a seeded generator.
+///   Discard the buffer on error; it may be partially filled.
+#[cfg(feature = "rand")]
+pub fn os_fill_bytes(dest: &mut [u8]) -> std::io::Result<()> {
+    #[cfg(getrandom_backend = "custom")]
+    {
+        let _ = dest;
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "OS entropy disabled in a custom getrandom build",
+        ))
+    }
+    #[cfg(not(getrandom_backend = "custom"))]
+    {
+        external_rand::rngs::OsRng
+            .try_fill_bytes(dest)
+            .map_err(Into::into)
+    }
+}
+
 #[cfg(any(feature = "rand", feature = "simulator"))]
 /// Fills a buffer with cryptographically secure randomness, except in simulation.
 ///
@@ -550,12 +578,43 @@ pub fn secure_fill_bytes(dest: &mut [u8]) -> Result<(), external_rand::Error> {
     }
     #[cfg(all(feature = "rand", not(feature = "simulator")))]
     {
-        external_rand::rngs::OsRng.try_fill_bytes(dest)
+        os_fill_bytes(dest).map_err(external_rand::Error::new)
     }
 }
 
 #[cfg(all(test, any(feature = "simulator", feature = "rand")))]
 mod secure_tests {
+    #[cfg(all(feature = "rand", getrandom_backend = "custom"))]
+    #[test]
+    fn intercepted_os_entropy_fails_before_writing() {
+        let mut bytes = [0xab; 16];
+        assert_eq!(
+            super::os_fill_bytes(&mut bytes).unwrap_err().kind(),
+            std::io::ErrorKind::Unsupported
+        );
+        #[cfg(not(feature = "simulator"))]
+        assert!(super::secure_fill_bytes(&mut bytes).is_err());
+        assert_eq!(bytes, [0xab; 16]);
+    }
+
+    #[cfg(all(
+        feature = "rand",
+        feature = "simulator",
+        not(getrandom_backend = "custom")
+    ))]
+    #[test]
+    fn os_entropy_leaves_simulator_stream_untouched() {
+        super::simulator::reset_rng();
+        let mut expected = [0; 32];
+        super::secure_fill_bytes(&mut expected).unwrap();
+        super::simulator::reset_rng();
+        let mut actual = [0; 32];
+        super::os_fill_bytes(&mut actual).unwrap();
+        super::secure_fill_bytes(&mut actual).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[cfg(any(feature = "simulator", not(getrandom_backend = "custom")))]
     #[test]
     fn fills_buffers_of_various_sizes() {
         for len in [0, 1, 21, 256, 4096] {

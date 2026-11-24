@@ -6,7 +6,8 @@
 //!
 //! # Features
 //!
-//! * `uuid` - Use the standard `uuid` crate for random UUID generation
+//! * `uuid` - Enable native generation and legacy `uuid` conversions
+//! * `native` - Generate using OS entropy without depending on `uuid`
 //! * `simulator` - Use deterministic UUID generation derived from the simulation run's seed
 //! * `serde` - Enable serde serialization/deserialization support
 //!
@@ -16,7 +17,7 @@
 //! use switchy_uuid::Uuid;
 //!
 //! // Generate a UUID (random or deterministic based on feature flags)
-//! # #[cfg(any(feature = "uuid", feature = "simulator"))]
+//! # #[cfg(any(feature = "native", feature = "simulator"))]
 //! # {
 //! let id = switchy_uuid::new_v4();
 //! let id_string = switchy_uuid::new_v4_string();
@@ -33,11 +34,14 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+mod text;
+#[cfg(feature = "serde")]
+mod wire;
 mod wrapper;
 
 pub use wrapper::{ParseError, Uuid};
 
-#[cfg(feature = "uuid")]
+#[cfg(feature = "native")]
 pub mod uuid;
 
 #[cfg(feature = "simulator")]
@@ -53,7 +57,7 @@ macro_rules! impl_uuid {
 #[cfg(feature = "simulator")]
 impl_uuid!(simulator);
 
-#[cfg(all(not(feature = "simulator"), feature = "uuid"))]
+#[cfg(all(not(feature = "simulator"), feature = "native"))]
 impl_uuid!(uuid);
 
 impl Uuid {
@@ -70,7 +74,7 @@ impl Uuid {
     /// let uuid = Uuid::new_v4();
     /// assert_eq!(uuid.get_version_num(), 4);
     /// ```
-    #[cfg(any(feature = "simulator", feature = "uuid"))]
+    #[cfg(any(feature = "simulator", feature = "native"))]
     #[must_use]
     pub fn new_v4() -> Self {
         new_v4()

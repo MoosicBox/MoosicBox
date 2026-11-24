@@ -141,6 +141,11 @@ fn resolve_log_dir(
     }
 }
 
+#[cfg(feature = "init")]
+mod daily;
+#[cfg(feature = "init")]
+pub mod writer;
+
 #[cfg(feature = "layer-ext")]
 pub type DynLayer =
     Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync + 'static>;
@@ -243,7 +248,7 @@ pub mod init {
     /// Handle that keeps logging resources alive for process lifetime.
     #[derive(Debug)]
     pub struct LoggingHandle {
-        _guards: Vec<tracing_appender::non_blocking::WorkerGuard>,
+        _guards: Vec<crate::writer::WorkerGuard>,
     }
 
     /// Initializes the global tracing subscriber.
@@ -284,12 +289,11 @@ pub mod init {
                         .append(true)
                         .open(file_path)
                         .map_err(InitError::CreateLogFile)?;
-                    tracing_appender::non_blocking(file)
+                    crate::writer::non_blocking(file)
                 }
                 FileMode::RollingDaily(prefix) => {
-                    let file_appender =
-                        tracing_appender::rolling::daily(&config.paths.log_dir, prefix);
-                    tracing_appender::non_blocking(file_appender)
+                    let file_appender = crate::daily::DailyFile::new(&config.paths.log_dir, prefix);
+                    crate::writer::non_blocking(file_appender)
                 }
             };
             guards.push(guard);

@@ -25,7 +25,8 @@ locations, never the host user's home. Filesystem scopes must wrap each async ta
 that resolves paths.
 
 - `init`: enables `init` module and tracing subscriber initialization APIs
-- `file`: enables daily rolling file output (`tracing-appender`); implies `init`
+- `file`: implies `init`, including exact and UTC daily file output. Both use the
+  package-owned bounded [`writer`](src/writer.rs). See [migration and validation](WRITER-MIGRATION.md).
 
 ## Installation
 

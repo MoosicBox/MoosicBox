@@ -19,9 +19,12 @@ group = "switchy"
 [dependencies]
 serde              = { workspace = true, optional = true }
 switchy_simulation = { workspace = true, optional = true }
-uuid               = { workspace = true, features = ["v4"] }
+switchy_random     = { workspace = true, optional = true, features = ["rand"] }
+uuid               = { workspace = true, optional = true }
 
 [dev-dependencies]
+bmux_codec = { workspace = true, features = ["serde", "stable"] }
+serde_json = { workspace = true }
 test-log = { workspace = true }
 
 [features]
@@ -29,7 +32,9 @@ default = ["simulator", "uuid"]
 
 fail-on-warnings = ["switchy_simulation?/fail-on-warnings"]
 
-serde = ["dep:serde", "uuid/serde"]
+serde = ["dep:serde", "uuid?/serde"]
 
 simulator = ["dep:switchy_simulation"]
-uuid = []
+native = ["dep:switchy_random"]
+uuid-compat = ["dep:uuid"]
+uuid = ["native", "uuid-compat"]

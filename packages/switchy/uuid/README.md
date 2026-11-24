@@ -6,7 +6,7 @@ Switchable UUID generation supporting both production and simulation modes.
 
 This package provides UUID v4 generation with configurable behavior:
 
-- **Production mode**: Cryptographically secure random UUIDs via the standard `uuid` crate
+- **Production mode**: UUID v4 generation from OS entropy; no seeded fallback
 - **Simulation mode**: Deterministic, seeded UUIDs for reproducible testing
 
 ## Features
@@ -63,9 +63,13 @@ SIMULATOR_SEED=12345
 
 ## Feature Flags
 
-- `uuid` (default): Enable standard UUID generation using `uuid::Uuid::new_v4()`
+- `native`: Enable UUID v4 generation from `switchy_random::os_fill_bytes`. In a custom-getrandom build explicit native generation fails closed (the existing infallible API panics).
+- `uuid-compat`: Keep the const `inner`/`from_inner`/`into_inner` and external conversion traits. This is the only normal dependency on the registry `uuid` crate.
+- `uuid` (default): Enable `native` and `uuid-compat` for existing consumers.
 - `simulator` (default): Enable deterministic UUID generation from the run's seed
 - `serde`: Enable serde serialization/deserialization support for the `Uuid` type
 - `fail-on-warnings`: Treat compiler warnings as errors
 
-**Note**: When both `uuid` and `simulator` are enabled, `simulator` takes precedence.
+**Migration:** Disable default features and select `native`, `simulator`, or neither (value-only), plus `serde` if needed. These builds store network-order `[u8; 16]` without `uuid`. If a no-default consumer uses an external conversion, add `uuid-compat` explicitly. Cargo features unify: every dependency edge must omit `uuid` and `uuid-compat` to remove the registry dependency. Parsing and formatting are owned in both modes; parse errors remain `ParseError` but diagnostic detail is not a wire contract.
+
+When native generation and simulation are both enabled, `simulator` takes precedence for `Uuid::new_v4()`.

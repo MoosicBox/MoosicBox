@@ -14,9 +14,13 @@ version     = "0.5.0"
 switchy_fs = { workspace = true, features = ["native-directories"] }
 
 thiserror          = { workspace = true }
-tracing-appender   = { workspace = true, optional = true }
+time               = { workspace = true, optional = true }
 tracing-log        = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tracing  = { workspace = true }
 
 [features]
 default          = []
@@ -26,7 +30,7 @@ simulator        = ["switchy_fs/simulator"]
 env-filter = ["init"]
 file = ["init"]
 init = [
-    "dep:tracing-appender",
+    "dep:time",
     "dep:tracing-subscriber",
     "tracing-subscriber/env-filter",
     "tracing-subscriber/fmt",

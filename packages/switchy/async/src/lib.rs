@@ -71,6 +71,9 @@ use std::{
     sync::{LazyLock, atomic::AtomicU64},
 };
 
+#[cfg(feature = "owned-driver")]
+pub mod owned;
+
 #[cfg(feature = "_any_backend")]
 pub use futures;
 #[cfg(feature = "macros")]

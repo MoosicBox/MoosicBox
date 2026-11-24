@@ -42,11 +42,7 @@ pub fn new_v4() -> Uuid {
         .unwrap_or_else(PoisonError::into_inner)
         .fill_bytes(&mut bytes);
 
-    // Set version (4) and variant bits according to RFC 4122
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant 10
-
-    Uuid::from_bytes(bytes)
+    Uuid::from_random_bytes(bytes)
 }
 
 /// Generates a deterministic UUID v4 as a hyphenated string.
@@ -88,6 +84,23 @@ mod tests {
         assert_ne!(uuids[0], uuids[1]);
         assert_ne!(uuids[1], uuids[2]);
         assert_ne!(uuids[0], uuids[2]);
+    }
+
+    #[test]
+    fn historical_seed_42() {
+        // Captured from the pre-migration implementation at 57cf1627f42d.
+        let sequence: Vec<_> = draw(&Context::new(42), 3)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            sequence,
+            [
+                "d379557a-e383-49bb-be17-0d6206ce7c98",
+                "e09072b2-7722-43b8-b09e-b88e0867e335",
+                "e52850ba-3c02-41e6-8689-f619681fba9a"
+            ]
+        );
     }
 
     #[test_log::test]
