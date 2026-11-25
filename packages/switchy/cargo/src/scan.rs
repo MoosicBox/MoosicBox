@@ -99,6 +99,33 @@ pub const FORBIDDEN: &[&str] = &[
     "HashSet",
     // Addresses differ between runs: never order by them.
     ".as_ptr",
+    // The platform's math library: its results differ in the last bits between systems, so a
+    // seed replays differently on another one. Use `libm`'s functions. (`sqrt`, `mul_add` and
+    // `powi` are exact by IEEE 754 or computed alike everywhere, and allowed.)
+    ".powf",
+    ".exp",
+    ".exp2",
+    ".exp_m1",
+    ".ln",
+    ".ln_1p",
+    ".log2",
+    ".log10",
+    ".cbrt",
+    ".hypot",
+    ".sin",
+    ".cos",
+    ".tan",
+    ".sin_cos",
+    ".asin",
+    ".acos",
+    ".atan",
+    ".atan2",
+    ".sinh",
+    ".cosh",
+    ".tanh",
+    ".asinh",
+    ".acosh",
+    ".atanh",
 ];
 
 /// One thing a scan reports.
@@ -1185,6 +1212,17 @@ mod tests {
             2
         );
         assert_eq!(check("fn f() { let id = std::process::id(); }").len(), 1);
+    }
+
+    #[test]
+    fn the_platforms_math_library_is_reported_and_exact_operations_are_not() {
+        assert_eq!(check("fn f(x: f64) -> f64 { x.powf(0.5) }").len(), 1);
+        assert_eq!(check("fn f(x: f64) -> f64 { x.sin() + x.ln() }").len(), 2);
+        assert_eq!(
+            check("fn f(x: f64) -> f64 { x.sqrt() + x.powi(3) + x.mul_add(2.0, 1.0) }"),
+            NONE
+        );
+        assert_eq!(check("fn f(x: f64) -> f64 { libm::pow(x, 0.5) }"), NONE);
     }
 
     #[test]
