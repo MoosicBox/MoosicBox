@@ -32,6 +32,9 @@ pub enum Verdict {
     /// Has entry points no seed controls, which the forbidden patterns ban (the reason names
     /// them).
     Restricted,
+    /// Linked, but none of its code runs in the simulation (the reason says why): like a local
+    /// crate's `runs = false`, a claim [`crate::Check::run_claims`] checks against coverage.
+    NotRun,
     /// Not audited yet: accepted as it was when the list was made (the reason says when).
     Unaudited,
 }
@@ -114,6 +117,10 @@ mod tests {
             name = "itoa"
             verdict = "pure"
             reason = "formats integers"
+            [[audit]]
+            name = "hyper"
+            verdict = "not-run"
+            reason = "the server's transport, never started in a run"
             "#,
         )
         .unwrap();
@@ -122,6 +129,7 @@ mod tests {
         assert_eq!(config.audit("uuid", &v("1.18.0")).unwrap().verdict, Verdict::Restricted);
         assert!(config.audit("uuid", &v("2.0.0")).is_none());
         assert!(config.audit("itoa", &v("9.9.9")).is_some());
+        assert_eq!(config.audit("hyper", &v("1.0.0")).unwrap().verdict, Verdict::NotRun);
         assert!(config.audit("rand", &v("0.8.5")).is_none());
     }
 

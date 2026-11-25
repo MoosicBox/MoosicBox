@@ -1,8 +1,9 @@
 //! Evidence that the crates marked `runs = false` do not run: what a simulation's
 //! coverage-instrumented runs executed.
 //!
-//! A crate's `runs = false` says simulations link it but never run it inside a run, so it is
-//! not scanned. That is a claim the scan cannot check. A build instrumented for coverage
+//! A crate's `runs = false` (an external crate's `not-run` audit) says simulations link it but
+//! never run it inside a run, so it is not scanned (not read). That is a claim the scan cannot
+//! check. A build instrumented for coverage
 //! (`-C instrument-coverage`) can: run the simulation's fleets, merge the profiles
 //! (`llvm-profdata merge`), export a summary (`llvm-cov export -summary-only`), and
 //! [`Executed::from_llvm_cov_export`] reads which lines of which files ran.

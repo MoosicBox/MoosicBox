@@ -65,9 +65,13 @@ forbid = ["my_crate::real_clock"]   # forbidden in every scanned crate
 [[audit]]
 name = "uuid"
 version = "^1"
-verdict = "restricted"   # pure | controlled | restricted | unaudited
+verdict = "restricted"   # pure | controlled | restricted | not-run | unaudited
 reason = "new_v4 reads OS randomness; the shared rules forbid it"
 ```
+
+`not-run` is a crate the simulation links but never runs (a transport no run starts, say): it
+need not be read, and like a local crate's `runs = false` it is checked against coverage
+(`--coverage`).
 
 `--baseline REASON` prints `unaudited` entries, pinned to exact versions, for the crates the
 list does not cover, to accept them as they are and audit them later.

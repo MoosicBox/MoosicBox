@@ -58,8 +58,8 @@ pub enum CrateOutcome {
     BadRules(String),
 }
 
-/// A crate marked `runs = false` that ran: its name, and each of its files that ran with how
-/// many of their lines did.
+/// A crate claimed not to run (a local crate's `runs = false`, an external crate's `not-run`
+/// audit) that ran: its name, and each of its files that ran with how many of their lines did.
 pub type BrokenClaim = (String, Vec<(PathBuf, u64)>);
 
 /// What a [`Check`] found.
@@ -146,9 +146,10 @@ impl Check {
 }
 
 impl Check {
-    /// Check the `runs = false` claims of the local crates the simulation links against what
-    /// its instrumented runs `executed` ([`coverage`]): every file of such a crate that ran,
-    /// by crate, with how many of its lines did. Empty when every claim held.
+    /// Check the claims that crates the simulation links never run (local crates' `runs =
+    /// false`, external crates' `not-run` audits) against what its instrumented runs `executed`
+    /// ([`coverage`]): every file of such a crate that ran, by crate, with how many of its lines
+    /// did. Empty when every claim held.
     ///
     /// # Errors
     ///
@@ -165,6 +166,19 @@ impl Check {
             let ran = executed.under(&krate.dir);
             if !ran.is_empty() {
                 broken.push((krate.name.clone(), ran));
+            }
+        }
+        for krate in &graph.external {
+            let not_run = self
+                .config
+                .audit(&krate.name, &krate.version)
+                .is_some_and(|audit| audit.verdict == Verdict::NotRun);
+            if !not_run {
+                continue;
+            }
+            let ran = executed.under(&krate.dir);
+            if !ran.is_empty() {
+                broken.push((format!("{} {}", krate.name, krate.version), ran));
             }
         }
         Ok(broken)
