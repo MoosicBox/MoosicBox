@@ -1233,7 +1233,10 @@ mod tests {
             check("unsafe extern \"C\" {\n    fn getpid() -> i32;\n}"),
             ["src/lib.rs:1: foreign functions: an `extern` block"]
         );
-        assert_eq!(check("fn f() -> i32 { unsafe { libc::getpid() } }").len(), 1);
+        assert_eq!(
+            check("fn f() -> i32 { unsafe { libc::getpid() } }").len(),
+            1
+        );
         assert_eq!(
             check("#[cfg(feature = \"native\")]\nunsafe extern \"C\" { fn getpid() -> i32; }"),
             NONE
