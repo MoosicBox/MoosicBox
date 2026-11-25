@@ -21,7 +21,8 @@
 //! * a method call or string literal a pattern names (`.canonicalize`, `/proc/self`);
 //! * process-wide mutable state: a `static` holding a lock, an atomic or a lazy value, and
 //!   `thread_local!` (fleet workers run many runs on one thread);
-//! * a `cfg` naming an operating system outside the files allowed to.
+//! * a `cfg` naming an operating system outside the files allowed to;
+//! * an `extern` block: foreign functions, which reach the host past every simulator.
 //!
 //! A line that uses a primitive on purpose says why: `// simulation-safe: <reason>` on it or on
 //! the line above (for a multi-line item, on any of its lines). `// native-only: begin` …
@@ -99,6 +100,9 @@ pub const FORBIDDEN: &[&str] = &[
     "HashSet",
     // Addresses differ between runs: never order by them.
     ".as_ptr",
+    // System calls and foreign functions reach the host directly, past every simulator (an
+    // `extern` block is reported too).
+    "libc",
     // The platform's math library: its results differ in the last bits between systems, so a
     // seed replays differently on another one. Use `libm`'s functions. (`sqrt`, `mul_add` and
     // `powi` are exact by IEEE 754 or computed alike everywhere, and allowed.)
@@ -1068,6 +1072,15 @@ impl<'ast> Visit<'ast> for Scanner<'_> {
                     self.tokens(&item_macro.mac.tokens);
                 }
             }
+            Item::ForeignMod(foreign) => {
+                if compiled(&foreign.attrs, self.features) {
+                    self.attributes(&foreign.attrs);
+                    self.report(
+                        foreign.span(),
+                        "foreign functions: an `extern` block".to_owned(),
+                    );
+                }
+            }
             other => {
                 if compiled(item_attrs(other), self.features) {
                     self.attributes(item_attrs(other));
@@ -1212,6 +1225,19 @@ mod tests {
             2
         );
         assert_eq!(check("fn f() { let id = std::process::id(); }").len(), 1);
+    }
+
+    #[test]
+    fn foreign_functions_are_reported() {
+        assert_eq!(
+            check("unsafe extern \"C\" {\n    fn getpid() -> i32;\n}"),
+            ["src/lib.rs:1: foreign functions: an `extern` block"]
+        );
+        assert_eq!(check("fn f() -> i32 { unsafe { libc::getpid() } }").len(), 1);
+        assert_eq!(
+            check("#[cfg(feature = \"native\")]\nunsafe extern \"C\" { fn getpid() -> i32; }"),
+            NONE
+        );
     }
 
     #[test]

@@ -63,11 +63,14 @@ for the host):
   `cfg`s do not.
 - **Crates from registries and git** must be on the simulation workspace's
   `determinism.toml` audit list, with a verdict (`pure`, `controlled`, `restricted`,
-  `unaudited`) and a reason; a new crate or version fails until it is audited.
+  `not-run`, `unaudited`) and a reason; a new crate or version fails until it is audited.
   `--scan-external` scans each external crate by the shared rules, as evidence for an audit.
-- **`runs = false` claims** are checked against coverage: build the simulation with
-  `-C instrument-coverage`, run it, export the merged profile (`llvm-cov export
-  -summary-only`), and `switchy_cargo --coverage EXPORT` fails if a file of such a crate ran.
+  A `restricted` crate's uncontrolled entry points, macros included, go in `forbid`.
+- **Claims that crates never run** (local `runs = false`, external `not-run`) are checked
+  against coverage: build the simulation with `-C instrument-coverage`, run it, export the
+  merged profile (`llvm-cov export -summary-only`), and `switchy_cargo --coverage EXPORT`
+  fails if a file of such a crate ran. Coverage of the fleets is also the quickest way to
+  find which external crates need reading: most a simulation links never run.
 
 ### Sources intercepted
 

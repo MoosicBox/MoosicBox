@@ -26,8 +26,15 @@ reports:
   process id; tokio's runtime, `spawn`, `time`, `select!` and `watch`; `rand`, `new_v4`,
   `HashMap`, `HashSet`, ordering by address) reached other than through a `switchy_` crate,
   once per import;
+- the platform's math library (`powf`, `exp`, `ln`, trigonometry: their last bits differ
+  between systems; use `libm`'s);
+- foreign functions: `libc`, and `extern` blocks;
 - process-wide mutable state (a `static` lock, atomic or lazy value, and `thread_local!`);
 - code chosen by operating system outside the files allowed to.
+
+A macro from another crate is scanned where it is invoked, not expanded: a macro that reaches
+a primitive (`lazy_static!`, `scoped_thread_local!`) is caught by naming it in `forbid` when its
+crate is audited.
 
 A line that uses the std version on purpose says why: `// simulation-safe: <reason>` (on it
 or the line above). `// native-only: begin` ... `// native-only: end` marks native-only lines
