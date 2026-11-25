@@ -98,7 +98,7 @@ use color_backtrace::{BacktracePrinter, termcolor::Buffer};
 use config::run_info;
 use formatting::TimeFormat as _;
 use host::{Host, HostResult};
-use simvar_observer::{ReplayControl, RunId, RunKind, SimEvent};
+use simvar_observer::{ReplayControl, RunId, RunKind, SimEvent, Verification};
 use simvar_utils::{
     cancel_global_simulation, cancel_simulation, is_global_simulator_cancelled,
     is_simulator_cancelled, reset_simulator_cancellation_token, worker_thread_id,
@@ -430,8 +430,32 @@ impl<B: SimBootstrap> fleet::JobRunner for Jobs<B> {
                     worker: 0,
                     epoch_offset: Some(request.epoch_offset),
                     control: request.control,
+                    record: false,
                 };
                 let _ = simulation.run_once(number, None, Replay::Seed(request.seed), &spec);
+            }
+            fleet::Job::Verify { seed, epoch_offset } => {
+                let spec = RunSpec {
+                    kind: RunKind::Replay,
+                    worker: 0,
+                    epoch_offset: Some(epoch_offset),
+                    control: None,
+                    record: true,
+                };
+                let first = simulation.run_once(number, None, Replay::Seed(seed), &spec);
+                let verification = if first.result.is_success() {
+                    match replay_in_fresh_process(&first) {
+                        Ok(replayed) => divergence(&first, &replayed)
+                            .map_or(Verification::Same, Verification::Diverged),
+                        Err(error) => Verification::Error(error),
+                    }
+                } else {
+                    Verification::Failed(first.result.to_string())
+                };
+                notify_observers(&SimEvent::Verified {
+                    id: spec.id(number, None),
+                    verification,
+                });
             }
             #[cfg(feature = "thread")]
             fleet::Job::Shrink { seed, epoch_offset } => {
@@ -775,6 +799,8 @@ struct RunSpec {
     #[cfg_attr(not(feature = "time"), allow(dead_code))]
     epoch_offset: Option<u64>,
     control: Option<Arc<ReplayControl>>,
+    /// Record what the run observes even when nothing else asks for it (a verify job).
+    record: bool,
 }
 
 impl RunSpec {
@@ -784,6 +810,7 @@ impl RunSpec {
             worker,
             epoch_offset: None,
             control: None,
+            record: false,
         }
     }
 
@@ -1044,6 +1071,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             worker: 0,
             epoch_offset: Some(epoch_offset),
             control: None,
+            record: false,
         };
         let id = spec.id(number, None);
         let first = self.run_once(number, None, Replay::Seed(seed), &spec);
@@ -1161,7 +1189,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         reset_simulator_cancellation_token();
         reset_step();
         // Only a run something compares records what it observed; others pay nothing for it.
-        if records_digest() {
+        if records_digest() || spec.record {
             switchy::simulation::digest::enable();
         }
 

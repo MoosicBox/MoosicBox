@@ -41,6 +41,20 @@ pub enum RunKind {
     Shrink,
 }
 
+/// What a verify job found replaying a run twice (see `simvar::control().verify`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Verification {
+    /// The run failed when the job ran it, with this report: it reproduced.
+    Failed(String),
+    /// The run passed, and its replay in a fresh process observed differently: how, starting
+    /// with the first observation that differs.
+    Diverged(String),
+    /// The run passed, and its replay observed everything the same.
+    Same,
+    /// The replay could not be made.
+    Error(String),
+}
+
 /// Something that happened in a simulation.
 #[derive(Clone)]
 #[non_exhaustive]
@@ -120,6 +134,13 @@ pub enum SimEvent {
         /// The data.
         payload: Arc<dyn Any + Send + Sync>,
     },
+    /// A verify job is done: what it found.
+    Verified {
+        /// The verify job (the run it made first).
+        id: RunId,
+        /// What it found.
+        verification: Verification,
+    },
     /// Every run is done.
     Finished,
 }
@@ -154,6 +175,7 @@ impl fmt::Debug for SimEvent {
                 "Shrink({id:?}, {attempts} attempts, {best_len}/{original_len} choices, done \
                  {done})"
             ),
+            Self::Verified { id, verification } => write!(f, "Verified({id:?}, {verification:?})"),
             Self::Telemetry { id, .. } => write!(f, "Telemetry({id:?})"),
             Self::Finished => f.write_str("Finished"),
         }

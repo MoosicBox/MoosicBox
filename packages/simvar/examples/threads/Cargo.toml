@@ -22,3 +22,9 @@ fail-on-warnings = [
     "simvar/fail-on-warnings",
     "switchy_thread/fail-on-warnings",
 ]
+
+# Its own `main`: a verify job replays a run by running this program again, which then runs
+# just that run (as a simulation's own binary would).
+[[test]]
+harness = false
+name    = "verify_process"

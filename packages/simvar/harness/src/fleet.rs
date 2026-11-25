@@ -81,6 +81,10 @@ pub enum JobError {
 /// What a job thread is asked to run.
 pub enum Job {
     Replay(ReplayRequest),
+    Verify {
+        seed: u64,
+        epoch_offset: u64,
+    },
     #[cfg(feature = "thread")]
     Shrink {
         seed: u64,
@@ -220,6 +224,19 @@ impl FleetControl {
     /// * [`JobError::NotStarted`] if no simulation has started in this process
     pub fn replay(&self, request: ReplayRequest) -> Result<RunId, JobError> {
         self.spawn_job(Job::Replay(request))
+    }
+
+    /// Check that the run `seed` and `epoch_offset` produced is deterministic, on a thread of
+    /// its own: run it (kind [`simvar_observer::RunKind::Replay`], with the usual events),
+    /// recording everything it observes, then replay it alone in a fresh, perturbed process of
+    /// this program, as `SIMULATOR_VERIFY_DETERMINISM=process` does, and report what was found
+    /// as a [`simvar_observer::SimEvent::Verified`]: where the two runs part, if they do.
+    ///
+    /// # Errors
+    ///
+    /// * [`JobError::NotStarted`] if no simulation has started in this process
+    pub fn verify(&self, seed: u64, epoch_offset: u64) -> Result<RunId, JobError> {
+        self.spawn_job(Job::Verify { seed, epoch_offset })
     }
 
     /// Shrink the thread schedule of the run that `seed` and `epoch_offset` produced, on a
