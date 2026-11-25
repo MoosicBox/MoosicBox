@@ -19,6 +19,7 @@ group = "switchy"
 [dependencies]
 switchy_simulation = { workspace = true, optional = true }
 
+libm    = { workspace = true }
 log     = { workspace = true }
 rand_08 = { workspace = true, features = ["small_rng", "std", "std_rng"] }
 

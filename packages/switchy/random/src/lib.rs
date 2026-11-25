@@ -470,7 +470,9 @@ impl_f64_round_convertible!(i128);
 #[must_use]
 #[cfg(any(feature = "simulator", feature = "rand"))]
 pub fn non_uniform_distribute_f64(value: f64, pow: f64, rng: &Rng) -> f64 {
-    value * rng.gen_range(0.0001..1.0f64).powf(pow)
+    // `libm`'s `pow`, not `f64::powf`: the platform's math library rounds differently between
+    // systems, and a seed must give the same values on every one.
+    value * libm::pow(rng.gen_range(0.0001..1.0f64), pow)
 }
 
 /// Applies a non-uniform distribution to a value using an integer power.

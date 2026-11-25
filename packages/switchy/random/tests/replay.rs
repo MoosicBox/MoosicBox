@@ -74,14 +74,15 @@ fn historical_simulator_reset() {
 #[test]
 fn historical_seeded_replay() {
     for (seed, expected) in [
-        (0, 17_869_191_804_123_392_245),
-        (1, 11_588_557_473_108_275_971),
-        (42, 14_309_709_537_806_800_332),
-        (12345, 2_111_074_904_683_261_702),
-        (u64::MAX, 12_379_848_376_455_795_659),
+        (0, 6_897_935_247_975_582_222),
+        (1, 13_406_813_981_857_806_425),
+        (42, 4_853_101_187_538_926_757),
+        (12345, 3_237_875_798_495_913_690),
+        (u64::MAX, 13_661_834_960_506_628_677),
     ] {
         // FNV-1a over little-endian words makes the long mixed-operation trace
-        // compact while checking exact float bits and random-consumption order.
+        // compact while checking exact float bits and random-consumption order. The same on
+        // every system: `gen_range_dist`'s power is `libm`'s, not the platform's.
         let digest = replay(seed)
             .into_iter()
             .flat_map(u64::to_le_bytes)
