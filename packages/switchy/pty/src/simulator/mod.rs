@@ -2092,8 +2092,7 @@ impl Process {
         state
             .processes
             .get_mut(&self.pid)
-            .map(|p| p.caught.drain(..).collect())
-            .unwrap_or_default()
+            .map_or_else(Vec::new, |p| p.caught.drain(..).collect())
     }
 
     /// Wait at most `timeout` of simulated time for a caught signal; it is taken.
