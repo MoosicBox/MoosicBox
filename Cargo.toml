@@ -156,6 +156,7 @@ default-members = [
     "packages/switchy/schema/examples/state_migration_test",
     "packages/switchy/schema/examples/static_migrations",
     "packages/switchy/schema/test_utils",
+    "packages/switchy/clock_probe",
     "packages/switchy/simulation",
     "packages/switchy/tcp",
     "packages/switchy/telemetry",
@@ -348,6 +349,7 @@ members = [
     "packages/switchy/schema/examples/state_migration_test",
     "packages/switchy/schema/examples/static_migrations",
     "packages/switchy/schema/test_utils",
+    "packages/switchy/clock_probe",
     "packages/switchy/simulation",
     "packages/switchy/tcp",
     "packages/switchy/telemetry",
@@ -420,6 +422,8 @@ version    = "0.5.0"
 
 [workspace.dependencies]
 age         = { version = "0.12.1", default-features = false }
+# Unresolved stack walks for switchy_clock_probe (symbolized only when reported).
+backtrace   = { version = "0.3.76" }
 libc        = { version = "0.2.191", default-features = false }
 # Portable floating-point functions: the same bits on every system (switchy_random).
 libm        = { version = "0.2.16", default-features = false }
@@ -523,6 +527,7 @@ switchy_random              = { version = "0.5.0", default-features = false, pat
 switchy_schema              = { version = "0.5.0", default-features = false, path = "packages/switchy/schema" }
 switchy_schema_cli          = { version = "0.5.0", default-features = false, path = "packages/switchy/schema/cli" }
 switchy_schema_test_utils   = { version = "0.5.0", default-features = false, path = "packages/switchy/schema/test_utils" }
+switchy_clock_probe         = { version = "0.5.0", default-features = false, path = "packages/switchy/clock_probe" }
 switchy_simulation          = { version = "0.5.0", default-features = false, path = "packages/switchy/simulation" }
 switchy_tcp                 = { version = "0.5.0", default-features = false, path = "packages/switchy/tcp" }
 switchy_telemetry           = { version = "0.5.0", default-features = false, path = "packages/switchy/telemetry" }

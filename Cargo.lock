@@ -17250,6 +17250,7 @@ dependencies = [
  "btparse",
  "color-backtrace",
  "ctrlc",
+ "libc",
  "log 0.4.34",
  "pretty_env_logger",
  "scoped-tls",
@@ -18531,6 +18532,14 @@ dependencies = [
  "serde_json",
  "syn 3.0.9",
  "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
+name = "switchy_clock_probe"
+version = "0.5.0"
+dependencies = [
+ "backtrace",
+ "libc",
 ]
 
 [[package]]

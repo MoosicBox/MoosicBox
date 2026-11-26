@@ -1,0 +1,28 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools::testing", "simulation"]
+description = "Counts the real clock reads a simulation run makes, loaded into its process"
+edition     = { workspace = true }
+keywords    = ["clock", "deterministic", "simulation", "testing"]
+license     = { workspace = true }
+name        = "switchy_clock_probe"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.5.0"
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[lib]
+# Only ever loaded into a simulation's process (LD_PRELOAD, DYLD_INSERT_LIBRARIES), never
+# linked: its `clock_gettime` would stand in for the C library's in whatever linked it.
+crate-type = ["cdylib"]
+
+[target.'cfg(unix)'.dependencies]
+backtrace = { workspace = true }
+libc      = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

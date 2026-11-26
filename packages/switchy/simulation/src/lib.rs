@@ -308,11 +308,20 @@ pub fn begin_run() {
     current().begin_run();
 }
 
-/// Whether the current thread is taking part in a simulation run: its context was marked
-/// with [`begin_run`] (simulated threads share their run's context). Never creates a context.
+/// Whether the current thread is taking part in a simulation run.
+///
+/// Its context was marked with [`begin_run`] (simulated threads share their run's context).
+/// Never creates a context, and never panics: a thread whose context is being torn down (or
+/// set) is in no run.
 #[must_use]
 pub fn in_run() -> bool {
-    CURRENT.with_borrow(|current| current.as_ref().is_some_and(|context| context.is_run()))
+    CURRENT
+        .try_with(|current| {
+            current
+                .try_borrow()
+                .is_ok_and(|current| current.as_ref().is_some_and(|context| context.is_run()))
+        })
+        .unwrap_or(false)
 }
 
 /// The next identifiers of kind `K`, per run.
