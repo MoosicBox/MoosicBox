@@ -97,7 +97,8 @@ pub enum Signal {
 pub struct Behavior {
     /// The terminal writes a cursor position request (`CSI 6 n`) when opened and holds its
     /// programs' output until the master answers with a cursor report (Windows `ConPTY`,
-    /// which inherits the cursor).
+    /// which inherits the cursor), unless it was opened without inheriting the cursor
+    /// ([`PtyOptions::inherit_cursor`]).
     pub startup_cursor_query: bool,
     /// The master side's output ends only once the master and the slave are both dropped
     /// (closing the console), not when the programs holding the terminal end; dropping the
@@ -109,6 +110,11 @@ pub struct Behavior {
     /// The master side has a device path ([`PtyMaster::tty_name`]) and a foreground process
     /// group (Unix).
     pub terminal_device: bool,
+    /// A process has the console on all of its standard streams or on none of them (Windows):
+    /// with all three redirected ([`Stdio::Piped`] or [`Stdio::Null`]) it runs without the
+    /// console, and a mix is refused. Otherwise (Unix) each stream may be the terminal or
+    /// redirected on its own.
+    pub console_on_all_streams_or_none: bool,
 }
 
 impl Behavior {
@@ -120,6 +126,7 @@ impl Behavior {
             output_ends_with_console: windows,
             process_groups: !windows,
             terminal_device: !windows,
+            console_on_all_streams_or_none: windows,
         }
     }
 }
@@ -157,11 +164,45 @@ impl PtyPair {
     /// # Errors
     /// * [`io::Error`] when the system cannot allocate a terminal.
     pub fn open(size: PtySize) -> io::Result<Self> {
+        #[cfg(any(feature = "simulator", not(windows)))]
+        let (master, slave) = native::open(size, PtyOptions::default())?;
+        #[cfg(all(windows, not(feature = "simulator")))]
         let (master, slave) = native::open(size)?;
         Ok(Self {
             slave: PtySlave(slave),
             master: PtyMaster(master),
         })
+    }
+
+    /// Open a new pseudo-terminal of `size`, as `options` say.
+    ///
+    /// # Errors
+    /// * [`io::Error`] when the system cannot allocate a terminal.
+    #[cfg(any(feature = "simulator", not(windows)))]
+    pub fn open_with(size: PtySize, options: PtyOptions) -> io::Result<Self> {
+        let (master, slave) = native::open(size, options)?;
+        Ok(Self {
+            slave: PtySlave(slave),
+            master: PtyMaster(master),
+        })
+    }
+}
+
+/// How [`PtyPair::open_with`] opens a terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PtyOptions {
+    /// A pseudo-console (Windows) takes over the cursor the terminal already has: it asks for
+    /// its position when opened (`CSI 6 n`) and holds its programs' output until the master
+    /// answers ([`Behavior::startup_cursor_query`]). Without it, the console starts with its
+    /// own cursor at the top left and asks nothing. Unix terminals ignore it. Default: on.
+    pub inherit_cursor: bool,
+}
+
+impl Default for PtyOptions {
+    fn default() -> Self {
+        Self {
+            inherit_cursor: true,
+        }
     }
 }
 
@@ -312,6 +353,16 @@ impl PtySlave {
     /// # Errors
     /// As [`Self::spawn`], and [`io::ErrorKind::InvalidInput`] for a malformed `cmd` script
     /// invocation or an invalid exact environment.
+    /// Start `command` as [`Self::spawn`] does, in `job`: ending the job ends it and everything
+    /// it starts.
+    ///
+    /// # Errors
+    /// As [`Self::spawn`].
+    #[cfg(any(feature = "simulator", not(windows)))]
+    pub fn spawn_in(&self, command: &SpawnCommand, job: &PtyJob) -> io::Result<PtyChild> {
+        self.0.spawn_in(command, &job.0).map(PtyChild)
+    }
+
     #[cfg(all(windows, not(feature = "simulator")))]
     pub fn spawn_in_job(
         &self,
@@ -319,6 +370,35 @@ impl PtySlave {
         job: std::os::windows::io::BorrowedHandle<'_>,
     ) -> io::Result<PtyChild> {
         self.0.spawn_in_job(command, job).map(PtyChild)
+    }
+}
+
+/// Processes that end together: those spawned into it ([`PtySlave::spawn_in`]) and everything
+/// they start, as a kill-on-close Job Object holds them on Windows. Dropping it ends them too.
+///
+/// Windows only ([`Behavior::process_groups`] is false): Unix processes have groups instead
+/// ([`signal_group`]).
+#[cfg(any(feature = "simulator", not(windows)))]
+#[derive(Debug)]
+pub struct PtyJob(native::Job);
+
+#[cfg(any(feature = "simulator", not(windows)))]
+impl PtyJob {
+    /// A new, empty job.
+    ///
+    /// # Errors
+    /// * [`io::ErrorKind::Unsupported`] where processes have groups instead (Unix).
+    /// * [`io::Error`] when the job cannot be created.
+    pub fn new() -> io::Result<Self> {
+        native::Job::new().map(Self)
+    }
+
+    /// End every process in the job now, those that outlived the one spawned into it included.
+    ///
+    /// # Errors
+    /// * [`io::Error`] when the job cannot be ended.
+    pub fn terminate(&self) -> io::Result<()> {
+        self.0.terminate()
     }
 }
 
@@ -472,6 +552,13 @@ impl PtyChild {
     /// [`Stdio::Piped`]. Available once.
     pub fn take_stdout(&mut self) -> Option<PtyPipeReader> {
         self.0.take_stdout().map(PtyPipeReader)
+    }
+
+    /// The pipe from the process's standard error, when [`SpawnCommand::stderr`] was
+    /// [`Stdio::Piped`]. Available once.
+    #[cfg(any(feature = "simulator", not(windows)))]
+    pub fn take_stderr(&mut self) -> Option<PtyPipeReader> {
+        self.0.take_stderr().map(PtyPipeReader)
     }
 
     /// A handle that ends the process from elsewhere; see [`PtyChildKiller`].

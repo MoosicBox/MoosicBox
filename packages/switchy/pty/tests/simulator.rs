@@ -969,7 +969,9 @@ fn killing_the_spawners_thread_group_leaves_their_processes_running() {
                 .group(group)
                 .spawn(|| {
                     let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
-                    let child = slave.spawn(SpawnCommand::new("sleep").arg("3600000")).unwrap();
+                    let child = slave
+                        .spawn(SpawnCommand::new("sleep").arg("3600000"))
+                        .unwrap();
                     let pid = child.id();
                     // Hold the terminal open, as the dead server's leaked handles would.
                     std::mem::forget((child, master, slave));
@@ -986,4 +988,151 @@ fn killing_the_spawners_thread_group_leaves_their_processes_running() {
         });
         assert!(running, "seed {seed}");
     }
+}
+
+/// The processes running in the session `serial` leads.
+fn running_in_session(serial: u64) -> usize {
+    simulator::snapshot()
+        .processes
+        .iter()
+        .filter(|p| p.session_serial == serial && p.state == ProcessState::Running)
+        .count()
+}
+
+#[test]
+fn ending_a_windows_job_ends_everything_its_process_started() {
+    for seed in 0..10 {
+        run(seed, Personality::Windows, || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let job = switchy_pty::PtyJob::new().unwrap();
+            let mut child = slave
+                .spawn_in(SpawnCommand::new("shell").arg("2"), &job)
+                .unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            master
+                .clone_writer()
+                .unwrap()
+                .write_all(b"\x1b[1;1R")
+                .unwrap();
+            read_until(&mut reader, b"started");
+            let serial = simulator::serial_of(child.id()).unwrap();
+            assert_eq!(running_in_session(serial), 3);
+            job.terminate().unwrap();
+            assert_eq!(child.wait().unwrap().exit_code(), 1);
+            scheduler::run_until_idle();
+            assert_eq!(running_in_session(serial), 0);
+        });
+    }
+}
+
+#[test]
+fn dropping_a_windows_job_ends_its_processes() {
+    for seed in 0..10 {
+        run(seed, Personality::Windows, || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let job = switchy_pty::PtyJob::new().unwrap();
+            let child = slave
+                .spawn_in(SpawnCommand::new("shell").arg("1"), &job)
+                .unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            master
+                .clone_writer()
+                .unwrap()
+                .write_all(b"\x1b[1;1R")
+                .unwrap();
+            read_until(&mut reader, b"started");
+            let serial = simulator::serial_of(child.id()).unwrap();
+            drop(job);
+            scheduler::run_until_idle();
+            assert_eq!(running_in_session(serial), 0);
+        });
+    }
+}
+
+#[test]
+fn unix_processes_have_groups_not_jobs() {
+    run(0, Personality::Linux, || {
+        let error = switchy_pty::PtyJob::new().unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::Unsupported);
+    });
+}
+
+#[test]
+fn a_windows_console_that_keeps_its_own_cursor_asks_nothing() {
+    for seed in 0..10 {
+        let (output, exit) = run(seed, Personality::Windows, || {
+            let options = switchy_pty::PtyOptions {
+                inherit_cursor: false,
+            };
+            let PtyPair { slave, master } =
+                PtyPair::open_with(PtySize::new(80, 24), options).unwrap();
+            let mut child = slave.spawn(SpawnCommand::new("exit").arg("4")).unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            // No report is ever written: the output flows anyway.
+            let output = read_until(&mut reader, b"bye\r\n");
+            (output, child.wait().unwrap())
+        });
+        assert_eq!(output, b"bye\r\n");
+        assert_eq!(exit.exit_code(), 4);
+    }
+}
+
+/// Spawn `out-err out err` with all three streams redirected, and read both pipes.
+fn redirected_out_err() -> (Vec<u8>, Vec<u8>, u32) {
+    let PtyPair {
+        slave,
+        master: _master,
+    } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+    let mut command = SpawnCommand::new("out-err");
+    command
+        .args(["out", "err"])
+        .stdin(Stdio::Null)
+        .stdout(Stdio::Piped)
+        .stderr(Stdio::Piped);
+    let mut child = slave.spawn(&command).unwrap();
+    let mut stdout = child.take_stdout().unwrap();
+    let mut stderr = child.take_stderr().unwrap();
+    let out = read_all(&mut stdout);
+    let err = read_all(&mut stderr);
+    (out, err, child.wait().unwrap().exit_code())
+}
+
+#[test]
+fn standard_output_and_error_each_have_their_own_pipe() {
+    for seed in 0..10 {
+        let (out, err, code) = run(seed, Personality::Linux, redirected_out_err);
+        assert_eq!(
+            (out.as_slice(), err.as_slice(), code),
+            (&b"out\n"[..], &b"err\n"[..], 0)
+        );
+    }
+}
+
+#[test]
+fn a_windows_process_with_its_streams_redirected_runs_without_the_console() {
+    for seed in 0..10 {
+        let (out, err, code) = run(seed, Personality::Windows, || {
+            assert!(switchy_pty::behavior().console_on_all_streams_or_none);
+            // No cursor report is ever written: the process does not wait on the console.
+            redirected_out_err()
+        });
+        assert_eq!(
+            (out.as_slice(), err.as_slice(), code),
+            (&b"out\n"[..], &b"err\n"[..], 0)
+        );
+    }
+}
+
+#[test]
+fn a_windows_process_has_the_console_on_all_of_its_streams_or_none() {
+    run(0, Personality::Windows, || {
+        let PtyPair {
+            slave,
+            master: _master,
+        } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+        let mut command = SpawnCommand::new("cat");
+        command.stdout(Stdio::Piped);
+        let error = slave.spawn(&command).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::Unsupported);
+    });
 }

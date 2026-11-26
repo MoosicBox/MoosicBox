@@ -264,3 +264,82 @@ fn process_groups_and_terminal_devices_exist_only_where_described() {
         drop(slave);
     });
 }
+
+/// A program writing `out` to standard output and `err` to standard error, a line each.
+fn printing_out_and_err() -> SpawnCommand {
+    program(
+        "echo out; echo err >&2",
+        "echo out& echo err 1>&2",
+        &["out-err", "out", "err"],
+    )
+}
+
+fn read_trimmed(reader: &mut impl std::io::Read) -> String {
+    let mut text = String::new();
+    reader.read_to_string(&mut text).unwrap();
+    text.trim().to_owned()
+}
+
+// Native Windows support arrives with its validation (consoles without streams, jobs).
+#[cfg(any(feature = "simulator", not(windows)))]
+#[test]
+fn redirected_streams_have_pipes_of_their_own() {
+    use switchy_pty::Stdio;
+    scenario(|| {
+        let pair = PtyPair::open(PtySize::new(80, 24)).unwrap();
+        let mut command = printing_out_and_err();
+        command
+            .stdin(Stdio::Null)
+            .stdout(Stdio::Piped)
+            .stderr(Stdio::Piped);
+        let mut child = pair.slave.spawn(&command).unwrap();
+        let mut stdout = child.take_stdout().unwrap();
+        let mut stderr = child.take_stderr().unwrap();
+        assert_eq!(read_trimmed(&mut stdout), "out");
+        assert_eq!(read_trimmed(&mut stderr), "err");
+        assert_eq!(child.wait().unwrap().exit_code(), 0);
+        drop(pair);
+    });
+}
+
+#[cfg(any(feature = "simulator", not(windows)))]
+#[test]
+fn the_console_is_on_all_streams_or_none_where_described() {
+    use switchy_pty::Stdio;
+    scenario(|| {
+        let behavior = switchy_pty::behavior();
+        let pair = PtyPair::open(PtySize::new(80, 24)).unwrap();
+        let mut command = printing_hello();
+        command.stdout(Stdio::Piped);
+        let spawned = pair.slave.spawn(&command);
+        if behavior.console_on_all_streams_or_none {
+            assert_eq!(spawned.unwrap_err().kind(), std::io::ErrorKind::Unsupported);
+        } else {
+            let mut child = spawned.unwrap();
+            assert_eq!(read_trimmed(&mut child.take_stdout().unwrap()), "hello");
+            child.wait().unwrap();
+        }
+        drop(pair);
+    });
+}
+
+#[cfg(any(feature = "simulator", not(windows)))]
+#[test]
+fn jobs_exist_where_processes_have_no_groups() {
+    scenario(|| {
+        let behavior = switchy_pty::behavior();
+        let job = switchy_pty::PtyJob::new();
+        if behavior.process_groups {
+            assert_eq!(job.unwrap_err().kind(), std::io::ErrorKind::Unsupported);
+            return;
+        }
+        let job = job.unwrap();
+        let pair = PtyPair::open(PtySize::new(80, 24)).unwrap();
+        let (mut terminal, slave) = Terminal::new(pair);
+        let mut child = slave.spawn_in(&long_running(), &job).unwrap();
+        terminal.answer_startup_query();
+        job.terminate().unwrap();
+        assert_eq!(child.wait().unwrap().exit_code(), 1);
+        drop(slave);
+    });
+}

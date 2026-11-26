@@ -171,6 +171,16 @@ fn echo_err(process: &mut Process) -> i32 {
     i32::from(process.write_fd(2, line.as_bytes()).is_err())
 }
 
+/// `out-err OUT ERR`: `OUT` to standard output, then `ERR` to standard error, each a line.
+fn out_err(process: &mut Process) -> i32 {
+    let out = format!("{}\n", process.args().get(1).map_or("", String::as_str));
+    let err = format!("{}\n", process.args().get(2).map_or("", String::as_str));
+    i32::from(
+        process.write_fd(1, out.as_bytes()).is_err()
+            || process.write_fd(2, err.as_bytes()).is_err(),
+    )
+}
+
 /// Register every program of the library for the current run:
 ///
 /// * `cat`: standard input to standard output.
@@ -200,4 +210,5 @@ pub fn install_default_programs() {
     register_program("pwd", pwd);
     register_program("echo", echo);
     register_program("echo-err", echo_err);
+    register_program("out-err", out_err);
 }

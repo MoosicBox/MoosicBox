@@ -18,7 +18,8 @@ use crate::{ChildExit, PtySize, Signal, SpawnCommand, Stdio};
 const HANGUP_GRACE: Duration = Duration::from_millis(50);
 const HANGUP_CHECKS: u32 = 5;
 
-pub fn open(size: PtySize) -> io::Result<(Master, Slave)> {
+/// A terminal of `size`; `PtyOptions` describe consoles, which Unix has none of.
+pub fn open(size: PtySize, _: crate::PtyOptions) -> io::Result<(Master, Slave)> {
     let (master, slave) = open_fds(size)?;
     let tty_name = tty_name(slave.as_fd());
     Ok((
@@ -220,12 +221,44 @@ impl PipeWriter {
     }
 }
 
+/// Jobs exist on Windows only: Unix processes have groups ([`crate::signal_group`]). None can
+/// be made, so the methods taking one are never reached.
+#[derive(Debug)]
+pub struct Job {
+    _none: (),
+}
+
+fn no_jobs() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::Unsupported,
+        "jobs exist on Windows only (Unix processes have groups)",
+    )
+}
+
+impl Job {
+    pub fn new() -> io::Result<Self> {
+        Err(no_jobs())
+    }
+
+    // Uniform with the backends that have jobs.
+    #[allow(clippy::unused_self)]
+    pub fn terminate(&self) -> io::Result<()> {
+        Err(no_jobs())
+    }
+}
+
 #[derive(Debug)]
 pub struct Slave {
     fd: OwnedFd,
 }
 
 impl Slave {
+    // Uniform with the backends that have jobs; no job exists here (see `Job`).
+    #[allow(clippy::unused_self)]
+    pub fn spawn_in(&self, _: &SpawnCommand, _: &Job) -> io::Result<Child> {
+        Err(no_jobs())
+    }
+
     pub fn spawn(&self, spec: &SpawnCommand) -> io::Result<Child> {
         let argv = spec.argv();
         let program = argv
@@ -466,6 +499,13 @@ impl Child {
     pub fn take_stdout(&mut self) -> Option<PipeReader> {
         self.child
             .stdout
+            .take()
+            .map(|pipe| PipeReader(File::from(OwnedFd::from(pipe))))
+    }
+
+    pub fn take_stderr(&mut self) -> Option<PipeReader> {
+        self.child
+            .stderr
             .take()
             .map(|pipe| PipeReader(File::from(OwnedFd::from(pipe))))
     }

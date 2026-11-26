@@ -211,6 +211,14 @@ pub enum ProcessState {
     Zombie(ChildExit),
 }
 
+/// The parent's ends of the pipes a spawn created, by the stream they connect.
+#[derive(Debug, Default, Clone, Copy)]
+struct SpawnedPipes {
+    stdin: Option<u64>,
+    stdout: Option<u64>,
+    stderr: Option<u64>,
+}
+
 /// A read-only view of one process.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessSnapshot {
@@ -1481,15 +1489,15 @@ impl Kernel {
         }
     }
 
-    fn open(&self, size: PtySize) -> u64 {
+    fn open(&self, size: PtySize, inherit_cursor: bool) -> u64 {
         self.switch();
         let mut state = lock(&self.state);
         let id = Self::new_id(&mut state);
         let capacity = Self::capacity(&state);
         let windows = state.config.personality.is_windows();
-        // A pseudo-console asks where its cursor is before anything else: at once, or (under
-        // the startup query fault) never or late.
-        let (query, held) = if !windows {
+        // A pseudo-console inheriting the cursor asks where it is before anything else: at
+        // once, or (under the startup query fault) never or late.
+        let (query, held) = if !windows || !inherit_cursor {
             (false, false)
         } else if self.chance(state.config.faults.startup_query) {
             if lock(&self.rng).chance(0.5) {
@@ -1569,7 +1577,7 @@ impl Kernel {
         spec: &SpawnCommand,
         terminal: Option<u64>,
         parent: Option<(u32, [Stream; 3], Placement)>,
-    ) -> io::Result<(u32, Option<u64>, Option<u64>)> {
+    ) -> io::Result<(u32, SpawnedPipes)> {
         self.switch();
         let argv: Vec<String> = spec
             .argv()
@@ -1602,6 +1610,24 @@ impl Kernel {
                 ),
             ));
         };
+        let windows = state.config.personality.is_windows();
+        // Windows: a process has the console on all of its streams or on none of them.
+        let detached = if parent.is_none() && windows {
+            let streams: [Stdio; 3] = spec.stdio().into();
+            let on_console = streams
+                .iter()
+                .filter(|stdio| **stdio == Stdio::Terminal)
+                .count();
+            if on_console == 1 || on_console == 2 {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "a Windows process has the console on all of its streams or on none",
+                ));
+            }
+            on_console == 0
+        } else {
+            false
+        };
         if self.chance(state.config.faults.spawn) {
             return Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
@@ -1618,15 +1644,13 @@ impl Kernel {
             ),
             b"",
         );
-        let windows = state.config.personality.is_windows();
         let session_serial = match parent {
             // A new session (Unix) is its own; a Windows process stays in its parent's job.
             Some((_, _, Placement::NewSession)) if !windows => serial,
             Some((p, _, _)) => state.processes[&p].session_serial,
             None => serial,
         };
-        let mut stdin_pipe = None;
-        let mut stdout_pipe = None;
+        let mut pipes = SpawnedPipes::default();
         let (group, session, streams, controlling, inherited) =
             if let Some((parent_pid, parent_streams, placement)) = parent {
                 let parent = &state.processes[&parent_pid];
@@ -1655,26 +1679,30 @@ impl Kernel {
                 {
                     let terminal = terminal.expect("a top-level spawn has a terminal");
                     let (stdin, stdout, stderr) = spec.stdio();
-                    let mut stream = |stdio: Stdio, input: bool, state: &mut State| match stdio {
-                        Stdio::Terminal => Stream::Terminal(terminal),
-                        Stdio::Null => Stream::Null,
-                        Stdio::Piped => {
-                            let pipe = Self::new_pipe(state);
-                            if input {
-                                stdin_pipe = Some(pipe);
-                                Stream::PipeRead(pipe)
-                            } else {
-                                stdout_pipe = Some(pipe);
-                                Stream::PipeWrite(pipe)
+                    let stream =
+                        |stdio: Stdio, slot: &mut Option<u64>, input: bool, state: &mut State| {
+                            match stdio {
+                                Stdio::Terminal => Stream::Terminal(terminal),
+                                Stdio::Null => Stream::Null,
+                                Stdio::Piped => {
+                                    let pipe = Self::new_pipe(state);
+                                    *slot = Some(pipe);
+                                    if input {
+                                        Stream::PipeRead(pipe)
+                                    } else {
+                                        Stream::PipeWrite(pipe)
+                                    }
+                                }
                             }
-                        }
-                    };
+                        };
                     let streams = [
-                        stream(stdin, true, &mut state),
-                        stream(stdout, false, &mut state),
-                        stream(stderr, false, &mut state),
+                        stream(stdin, &mut pipes.stdin, true, &mut state),
+                        stream(stdout, &mut pipes.stdout, false, &mut state),
+                        stream(stderr, &mut pipes.stderr, false, &mut state),
                     ];
-                    let controlling = spec.is_controlling_terminal().then_some(terminal);
+                    // A Windows process with its streams redirected runs without the console.
+                    let controlling =
+                        (spec.is_controlling_terminal() && !detached).then_some(terminal);
                     if let Some(t) = controlling.and_then(|t| state.terminals.get_mut(&t)) {
                         t.session = Some(pid);
                         t.foreground = Some(pid);
@@ -1689,17 +1717,17 @@ impl Kernel {
             Self::hold(&mut state, stream);
         }
         // The parent holds the other ends of new pipes.
-        if let Some(pipe) = stdin_pipe {
+        if let Some(pipe) = pipes.stdin {
             Self::hold(&mut state, Stream::PipeWrite(pipe));
         }
-        if let Some(pipe) = stdout_pipe {
+        for pipe in [pipes.stdout, pipes.stderr].into_iter().flatten() {
             Self::hold(&mut state, Stream::PipeRead(pipe));
         }
         if parent.is_none() {
             let terminal = terminal.and_then(|t| state.terminals.get(&t).map(|t| t.name.clone()));
             let io = ProcessIo {
                 terminal,
-                stdout_pipe,
+                stdout_pipe: pipes.stdout,
             };
             state.io.insert(pid, io.clone());
             let spawner = scheduler::scheduler().me();
@@ -1789,7 +1817,7 @@ impl Kernel {
                 };
                 kernel.exit(pid, exit);
             })?;
-        Ok((pid, stdin_pipe, stdout_pipe))
+        Ok((pid, pipes))
     }
 }
 
@@ -2213,9 +2241,10 @@ impl Process {
 )]
 pub(crate) mod backend {
     use std::{
+        collections::BTreeSet,
         io,
         path::{Path, PathBuf},
-        sync::Arc,
+        sync::{Arc, Mutex},
         time::Duration,
     };
 
@@ -2235,9 +2264,9 @@ pub(crate) mod backend {
     #[cfg(unix)]
     pub use super::signal_name;
 
-    pub fn open(size: PtySize) -> io::Result<(Master, Slave)> {
+    pub fn open(size: PtySize, options: crate::PtyOptions) -> io::Result<(Master, Slave)> {
         let kernel = kernel();
-        let terminal = kernel.open(size);
+        let terminal = kernel.open(size, options.inherit_cursor);
         let name = (!lock(&kernel.state).config.personality.is_windows())
             .then(|| PathBuf::from(format!("/dev/simpts/{terminal}")));
         Ok((
@@ -2590,20 +2619,93 @@ pub(crate) mod backend {
     }
 
     impl Slave {
+        /// Start `spec` as [`Self::spawn`] does, in `job`.
+        pub fn spawn_in(&self, spec: &SpawnCommand, job: &Job) -> io::Result<Child> {
+            let child = self.spawn(spec)?;
+            job.adopt(child.pid);
+            Ok(child)
+        }
+
         pub fn spawn(&self, spec: &SpawnCommand) -> io::Result<Child> {
-            let (pid, stdin, stdout) = self.kernel.spawn(spec, Some(self.terminal), None)?;
+            let (pid, pipes) = self.kernel.spawn(spec, Some(self.terminal), None)?;
+            let reader = |pipe| PipeReader {
+                kernel: Arc::clone(&self.kernel),
+                pipe,
+            };
             Ok(Child {
                 kernel: Arc::clone(&self.kernel),
                 pid,
-                stdin: stdin.map(|pipe| PipeWriter {
+                stdin: pipes.stdin.map(|pipe| PipeWriter {
                     kernel: Arc::clone(&self.kernel),
                     pipe,
                 }),
-                stdout: stdout.map(|pipe| PipeReader {
-                    kernel: Arc::clone(&self.kernel),
-                    pipe,
-                }),
+                stdout: pipes.stdout.map(reader),
+                stderr: pipes.stderr.map(reader),
             })
+        }
+    }
+
+    /// The processes spawned into a job and everything they start, as a kill-on-close Job
+    /// Object holds them on Windows: the kernel's sessions of its processes (a Windows process
+    /// stays in the session it was created in, so its descendants are the job's too).
+    #[derive(Debug)]
+    pub struct Job {
+        kernel: Arc<Kernel>,
+        sessions: Mutex<BTreeSet<u64>>,
+    }
+
+    impl Job {
+        pub fn new() -> io::Result<Self> {
+            let kernel = kernel();
+            if !lock(&kernel.state).config.personality.is_windows() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "jobs exist on Windows only (Unix processes have groups)",
+                ));
+            }
+            Ok(Self {
+                kernel,
+                sessions: Mutex::new(BTreeSet::new()),
+            })
+        }
+
+        fn adopt(&self, pid: u32) {
+            let session = lock(&self.kernel.state)
+                .processes
+                .get(&pid)
+                .map(|process| process.session_serial);
+            if let Some(session) = session {
+                lock(&self.sessions).insert(session);
+            }
+        }
+
+        /// End every running process in the job, at once (exit code 1, as Windows'
+        /// `TerminateJobObject` here).
+        pub fn terminate(&self) -> io::Result<()> {
+            self.kernel.switch();
+            let sessions = lock(&self.sessions).clone();
+            let mut state = lock(&self.kernel.state);
+            let members: Vec<u32> = state
+                .processes
+                .iter()
+                .filter(|(_, p)| {
+                    p.state == ProcessState::Running && sessions.contains(&p.session_serial)
+                })
+                .map(|(pid, _)| *pid)
+                .collect();
+            for pid in members {
+                Kernel::deliver(&mut state, pid, Signal::Kill);
+            }
+            drop(state);
+            self.kernel.wake();
+            Ok(())
+        }
+    }
+
+    impl Drop for Job {
+        fn drop(&mut self) {
+            // Kill on close: the last handle gone, what is left ends.
+            let _ = self.terminate();
         }
     }
 
@@ -2613,6 +2715,7 @@ pub(crate) mod backend {
         pid: u32,
         stdin: Option<PipeWriter>,
         stdout: Option<PipeReader>,
+        stderr: Option<PipeReader>,
     }
 
     impl Drop for Child {
@@ -2639,6 +2742,10 @@ pub(crate) mod backend {
 
         pub const fn take_stdout(&mut self) -> Option<PipeReader> {
             self.stdout.take()
+        }
+
+        pub const fn take_stderr(&mut self) -> Option<PipeReader> {
+            self.stderr.take()
         }
 
         fn reap(state: &mut State, pid: u32) -> Option<ChildExit> {
