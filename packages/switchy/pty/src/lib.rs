@@ -338,6 +338,16 @@ impl PtySlave {
         self.0.spawn(command).map(PtyChild)
     }
 
+    /// Start `command` as [`Self::spawn`] does, in `job`: ending the job ends it and everything
+    /// it starts.
+    ///
+    /// # Errors
+    /// As [`Self::spawn`].
+    #[cfg(any(feature = "simulator", not(windows)))]
+    pub fn spawn_in(&self, command: &SpawnCommand, job: &PtyJob) -> io::Result<PtyChild> {
+        self.0.spawn_in(command, &job.0).map(PtyChild)
+    }
+
     /// Start `command` as [`Self::spawn`] does, inside the caller's Job Object `job`.
     ///
     /// The process is assigned to the job as it is created, so it cannot run, or start anything,
@@ -358,16 +368,6 @@ impl PtySlave {
     /// # Errors
     /// As [`Self::spawn`], and [`io::ErrorKind::InvalidInput`] for a malformed `cmd` script
     /// invocation or an invalid exact environment.
-    /// Start `command` as [`Self::spawn`] does, in `job`: ending the job ends it and everything
-    /// it starts.
-    ///
-    /// # Errors
-    /// As [`Self::spawn`].
-    #[cfg(any(feature = "simulator", not(windows)))]
-    pub fn spawn_in(&self, command: &SpawnCommand, job: &PtyJob) -> io::Result<PtyChild> {
-        self.0.spawn_in(command, &job.0).map(PtyChild)
-    }
-
     #[cfg(all(windows, not(feature = "simulator")))]
     pub fn spawn_in_job(
         &self,
