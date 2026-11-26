@@ -72,6 +72,12 @@ for the host):
   fails if a file of such a crate ran. Coverage of the fleets is also the quickest way to
   find which external crates need reading: most a simulation links never run.
 
+- **Real clock reads that slipped through** are counted at run time:
+  `switchy_clock_probe`, loaded into the simulation's process, stands in for the C library's
+  clock functions, and `SIMULATOR_CLOCK_READS=report` (or `fail`) lists every call site that
+  read the real clock inside a run, by its caller (the simulators' own reads are allowed;
+  `SIMULATOR_CLOCK_READS_ALLOW` names others whose reads never reach a run).
+
 ### Sources intercepted
 
 - **Randomness.** Build simulations with `--cfg getrandom_backend="custom"` (in the simulation

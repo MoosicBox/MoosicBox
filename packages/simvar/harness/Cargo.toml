@@ -16,6 +16,10 @@ examples = false
 [package.metadata.workspaces]
 group = "simvar"
 
+[target.'cfg(unix)'.dependencies]
+# Finds the clock probe's functions at run time (`SIMULATOR_CLOCK_READS`).
+libc = { workspace = true }
+
 [dependencies]
 simvar_observer = { workspace = true }
 simvar_ratatui = { workspace = true, optional = true }

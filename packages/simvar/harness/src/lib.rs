@@ -70,6 +70,9 @@
 //!   (a determinism failure names the first observation that differs)
 //! * `SIMULATOR_SHRINK` - With the `thread` feature: shrink a failing run's thread schedule
 //!   (`1`/`true` for up to 1000 replays, or a number of replays) and print how to replay it
+//! * `SIMULATOR_CLOCK_READS` - `report` or `fail`: count the real clock reads runs make, with
+//!   `switchy_clock_probe` loaded into the process (see the `clock_reads` module);
+//!   `SIMULATOR_CLOCK_READS_ALLOW` lists call sites allowed (comma-separated patterns)
 //! * `NO_TUI` - Disable terminal UI when set (at build or run time); it is also off when stdout is not a terminal
 //!
 //! # Steering a running simulation
@@ -124,6 +127,7 @@ pub use switchy;
 /// [`Client`]: client::Client
 pub mod client;
 
+mod clock_reads;
 mod config;
 mod fleet;
 
@@ -327,6 +331,7 @@ pub fn run_simulation<B: SimBootstrap>(
         )));
     }
     switchy::simulation::require_contexts();
+    let clock_reads = clock_reads::ClockReads::start()?;
 
     ctrlc::set_handler(ctrl_c).expect("Error setting Ctrl-C handler");
 
@@ -384,6 +389,9 @@ pub fn run_simulation<B: SimBootstrap>(
 
     let resp = sim_orchestrator.start();
     notify(&SimEvent::Finished);
+    if let Some(clock_reads) = clock_reads {
+        clock_reads.finish()?;
+    }
 
     // The display stays up once every run is done, until the user quits it.
     #[cfg(feature = "tui")]
@@ -1634,7 +1642,9 @@ fn replay_in_fresh_process(first: &RunOutcome) -> Result<Replayed, String> {
         .env("SIMULATOR_DIGEST_OUT", &out)
         .env("NO_TUI", "1")
         .env_remove("SIMULATOR_VERIFY_DETERMINISM")
-        .env_remove("SIMULATOR_SHRINK");
+        .env_remove("SIMULATOR_SHRINK")
+        // The run counts its own clock reads; the replay only checks what it observes.
+        .env_remove("SIMULATOR_CLOCK_READS");
     #[cfg(feature = "time")]
     command.env(
         "SIMULATOR_EPOCH_OFFSET",
