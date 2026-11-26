@@ -280,8 +280,6 @@ fn read_trimmed(reader: &mut impl std::io::Read) -> String {
     text.trim().to_owned()
 }
 
-// Native Windows support arrives with its validation (consoles without streams, jobs).
-#[cfg(any(feature = "simulator", not(windows)))]
 #[test]
 fn redirected_streams_have_pipes_of_their_own() {
     use switchy_pty::Stdio;
@@ -302,7 +300,6 @@ fn redirected_streams_have_pipes_of_their_own() {
     });
 }
 
-#[cfg(any(feature = "simulator", not(windows)))]
 #[test]
 fn the_console_is_on_all_streams_or_none_where_described() {
     use switchy_pty::Stdio;
@@ -323,7 +320,6 @@ fn the_console_is_on_all_streams_or_none_where_described() {
     });
 }
 
-#[cfg(any(feature = "simulator", not(windows)))]
 #[test]
 fn jobs_exist_where_processes_have_no_groups() {
     scenario(|| {
