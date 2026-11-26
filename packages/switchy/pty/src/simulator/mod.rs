@@ -1605,8 +1605,7 @@ impl Kernel {
                 format!(
                     "cannot run {name}: not found on PATH {}",
                     spec.get_env("PATH")
-                        .map(OsStr::to_string_lossy)
-                        .unwrap_or_default()
+                        .map_or_else(Default::default, OsStr::to_string_lossy)
                 ),
             ));
         };
