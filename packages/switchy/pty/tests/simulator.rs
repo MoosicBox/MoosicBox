@@ -1063,6 +1063,7 @@ fn a_windows_console_that_keeps_its_own_cursor_asks_nothing() {
         let (output, exit) = run(seed, Personality::Windows, || {
             let options = switchy_pty::PtyOptions {
                 inherit_cursor: false,
+                ..switchy_pty::PtyOptions::default()
             };
             let PtyPair { slave, master } =
                 PtyPair::open_with(PtySize::new(80, 24), options).unwrap();

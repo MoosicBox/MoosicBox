@@ -196,12 +196,17 @@ pub struct PtyOptions {
     /// answers ([`Behavior::startup_cursor_query`]). Without it, the console starts with its
     /// own cursor at the top left and asks nothing. Unix terminals ignore it. Default: on.
     pub inherit_cursor: bool,
+    /// A pseudo-console (Windows) asks the terminal for win32 input mode, in which every key
+    /// event arrives (a terminal may ignore the request). Without it, typed bytes are taken as
+    /// they are. Unix terminals and the simulator ignore it. Default: on.
+    pub win32_input_mode: bool,
 }
 
 impl Default for PtyOptions {
     fn default() -> Self {
         Self {
             inherit_cursor: true,
+            win32_input_mode: true,
         }
     }
 }
