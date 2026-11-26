@@ -483,6 +483,8 @@ pub mod unsync {
     ///
     /// # Errors
     /// * Native failures; `Unsupported` on non-Unix platforms.
+    // Async on every platform, though only Unix has anything to wait for.
+    #[cfg_attr(not(unix), allow(clippy::unused_async))]
     pub async fn symlink(
         original: impl AsRef<Path>,
         link: impl AsRef<Path>,
@@ -523,6 +525,8 @@ pub mod unsync {
     ///
     /// # Errors
     /// * The path cannot be opened or is not a directory; `Unsupported` on non-Unix.
+    // Async on every platform, though only Unix has anything to wait for.
+    #[cfg_attr(not(unix), allow(clippy::unused_async))]
     pub async fn sync_directory(path: impl AsRef<Path>) -> std::io::Result<()> {
         #[cfg(unix)]
         {

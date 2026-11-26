@@ -2288,9 +2288,9 @@ fn quantize_decay(
     let mut current_gain = gain;
     let mut history = *history;
     rescale_history(&mut history, old_gain, current_gain);
-    let mut ltp = pitch
-        .map(|p| prediction::rewhiten(previous_pcm, lpc, gain, p.lag, rate / 50))
-        .unwrap_or_default();
+    let mut ltp = pitch.map_or_else(Default::default, |p| {
+        prediction::rewhiten(previous_pcm, lpc, gain, p.lag, rate / 50)
+    });
     let mut seed = 0_u32;
     let mut pulses = Vec::with_capacity(input.len().next_multiple_of(16));
     let mut pcm = Vec::with_capacity(input.len());
