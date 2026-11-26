@@ -14,21 +14,27 @@ use std::fs::File;
 use std::io::{self, Read as _, Write as _};
 use std::os::windows::ffi::{OsStrExt as _, OsStringExt as _};
 use std::os::windows::io::{
-    AsRawHandle as _, BorrowedHandle, FromRawHandle as _, OwnedHandle, RawHandle,
+    AsHandle as _, AsRawHandle as _, BorrowedHandle, FromRawHandle as _, OwnedHandle, RawHandle,
 };
 use std::path::{Path, PathBuf};
 use std::ptr::{null, null_mut};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
-    ERROR_BROKEN_PIPE, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS, HANDLE, INVALID_HANDLE_VALUE, S_OK,
-    WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    ERROR_BROKEN_PIPE, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS, HANDLE, HANDLE_FLAG_INHERIT,
+    INVALID_HANDLE_VALUE, S_OK, SetHandleInformation, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Globalization::CompareStringOrdinal;
 use windows_sys::Win32::System::Console::{
     COORD, ClosePseudoConsole, CreatePseudoConsole, HPCON, ResizePseudoConsole,
 };
 use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
+use windows_sys::Win32::System::JobObjects::{
+    CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
+};
 use windows_sys::Win32::System::LibraryLoader::{
     GetProcAddress, LOAD_LIBRARY_SEARCH_APPLICATION_DIR, LoadLibraryExW,
 };
@@ -37,15 +43,15 @@ use windows_sys::Win32::System::Registry::{
     RegEnumValueW, RegOpenKeyExW, RegQueryInfoKeyW,
 };
 use windows_sys::Win32::System::Threading::{
-    CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList,
+    CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList,
     EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, INFINITE, InitializeProcThreadAttributeList,
-    PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, PROCESS_INFORMATION,
-    STARTF_USESTDHANDLES, STARTUPINFOEXW, TerminateProcess, UpdateProcThreadAttribute,
-    WaitForSingleObject,
+    PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROC_THREAD_ATTRIBUTE_JOB_LIST,
+    PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject,
 };
 use windows_sys::core::HRESULT;
 
-use windows_sys::Win32::System::Pipes::CreatePipe;
+use windows_sys::Win32::System::Pipes::{CreatePipe, PeekNamedPipe};
 
 use crate::{ChildExit, PtySize, Signal, SpawnCommand, Stdio};
 
@@ -142,6 +148,18 @@ impl Drop for Console {
     }
 }
 
+/// The flags a console is created with, as `options` say.
+const fn console_flags(options: crate::PtyOptions) -> u32 {
+    let mut flags = PSEUDOCONSOLE_RESIZE_QUIRK;
+    if options.inherit_cursor {
+        flags |= PSEUDOCONSOLE_INHERIT_CURSOR;
+    }
+    if options.win32_input_mode {
+        flags |= PSEUDOCONSOLE_WIN32_INPUT_MODE;
+    }
+    flags
+}
+
 /// What the master and slave share: the console, closed with the last of them.
 /// The console is closed first, then the pipe ends; a writer never taken keeps the console's
 /// input open until both sides are gone.
@@ -150,6 +168,8 @@ struct Shared {
     size: Mutex<PtySize>,
     output: File,
     input: Mutex<Option<File>>,
+    /// Whether reads of the console's output return `WouldBlock` instead of waiting.
+    nonblocking: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for Shared {
@@ -164,7 +184,7 @@ impl std::fmt::Debug for Shared {
     }
 }
 
-pub fn open(size: PtySize) -> io::Result<(Master, Slave)> {
+pub fn open(size: PtySize, options: crate::PtyOptions) -> io::Result<(Master, Slave)> {
     let (console_input, input) = pipe()?;
     let (output, console_output) = pipe()?;
     let mut console: HPCON = 0;
@@ -174,9 +194,7 @@ pub fn open(size: PtySize) -> io::Result<(Master, Slave)> {
             coord(size),
             console_input.as_raw_handle(),
             console_output.as_raw_handle(),
-            PSEUDOCONSOLE_INHERIT_CURSOR
-                | PSEUDOCONSOLE_RESIZE_QUIRK
-                | PSEUDOCONSOLE_WIN32_INPUT_MODE,
+            console_flags(options),
             &raw mut console,
         )
     };
@@ -190,6 +208,7 @@ pub fn open(size: PtySize) -> io::Result<(Master, Slave)> {
         size: Mutex::new(size),
         output: File::from(output),
         input: Mutex::new(Some(File::from(input))),
+        nonblocking: Arc::new(AtomicBool::new(false)),
     });
     Ok((
         Master {
@@ -233,7 +252,10 @@ impl Master {
     }
 
     pub fn try_clone_reader(&self) -> io::Result<Reader> {
-        Ok(Reader(self.shared.output.try_clone()?))
+        Ok(Reader {
+            file: self.shared.output.try_clone()?,
+            nonblocking: Arc::clone(&self.shared.nonblocking),
+        })
     }
 
     pub fn clone_writer(&self) -> io::Result<Input> {
@@ -252,10 +274,16 @@ impl Master {
             .map(Input)
     }
 
-    // Uniform with Unix; a console's pipes cannot be made non-blocking.
-    #[allow(clippy::unused_self)]
-    pub fn set_nonblocking(&self, _nonblocking: bool) -> io::Result<()> {
-        Err(unsupported("non-blocking pseudo-console handles"))
+    /// Reads of the console's output return `WouldBlock` while nothing waits (anonymous pipes
+    /// cannot be made non-blocking, so readers look first). Writes still wait while the console
+    /// is not reading: [`Input::wait_writable`] says so at once.
+    // Fallible on every platform: Unix sets the descriptor's flags.
+    #[allow(clippy::unnecessary_wraps)]
+    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+        self.shared
+            .nonblocking
+            .store(nonblocking, Ordering::Release);
+        Ok(())
     }
 
     // The console holds its own end open until the master and slave are both dropped.
@@ -293,28 +321,84 @@ impl Master {
 }
 
 #[derive(Debug)]
-pub struct Reader(File);
-
-impl Reader {
-    pub fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-        match self.0.read(buffer) {
-            // The console closed its end.
-            Err(error)
-                if error.raw_os_error()
-                    == Some(i32::try_from(ERROR_BROKEN_PIPE).unwrap_or(i32::MAX)) =>
-            {
-                Ok(0)
-            }
-            other => other,
-        }
-    }
+pub struct Reader {
+    file: File,
+    nonblocking: Arc<AtomicBool>,
 }
 
 impl Reader {
-    // Uniform with Unix; anonymous pipes cannot be polled.
-    #[allow(clippy::unused_self)]
-    pub fn wait_readable(&self, _timeout: std::time::Duration) -> io::Result<bool> {
-        Err(unsupported("waiting on pseudo-console output"))
+    pub fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        read_pipe(
+            &mut self.file,
+            buffer,
+            self.nonblocking.load(Ordering::Acquire),
+        )
+    }
+
+    pub fn wait_readable(&self, timeout: Duration) -> io::Result<bool> {
+        wait_pipe(&self.file, timeout)
+    }
+}
+
+/// Whether `error` says the pipe's other end is gone.
+fn broken_pipe(error: &io::Error) -> bool {
+    error.raw_os_error() == Some(i32::try_from(ERROR_BROKEN_PIPE).unwrap_or(i32::MAX))
+}
+
+/// How many bytes wait in the pipe `file` reads from, or `None` once its writers are all gone.
+fn available(file: &File) -> io::Result<Option<u32>> {
+    let mut available = 0u32;
+    // SAFETY: a pipe handle and a valid out-pointer; no data is copied.
+    if unsafe {
+        PeekNamedPipe(
+            file.as_raw_handle(),
+            null_mut(),
+            0,
+            null_mut(),
+            &raw mut available,
+            null_mut(),
+        )
+    } == 0
+    {
+        let error = io::Error::last_os_error();
+        return if broken_pipe(&error) {
+            Ok(None)
+        } else {
+            Err(error)
+        };
+    }
+    Ok(Some(available))
+}
+
+/// Read from the pipe `file`: end of file once its writers are gone; when `nonblocking`,
+/// `WouldBlock` while nothing waits.
+fn read_pipe(file: &mut File, buffer: &mut [u8], nonblocking: bool) -> io::Result<usize> {
+    if nonblocking {
+        match available(file)? {
+            None => return Ok(0),
+            Some(0) => return Err(io::Error::from(io::ErrorKind::WouldBlock)),
+            Some(_) => {}
+        }
+    }
+    match file.read(buffer) {
+        Err(error) if broken_pipe(&error) => Ok(0),
+        other => other,
+    }
+}
+
+/// Wait at most `timeout` for something to read (or the end) in the pipe `file`; whether there
+/// is. Anonymous pipes cannot be waited on, so this looks every few milliseconds.
+fn wait_pipe(file: &File, timeout: Duration) -> io::Result<bool> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if available(file)?.is_none_or(|bytes| bytes > 0) {
+            return Ok(true);
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Ok(false);
+        }
+        std::thread::sleep(left.min(Duration::from_millis(5)));
     }
 }
 
@@ -330,46 +414,107 @@ impl Input {
         self.0.flush()
     }
 
-    // Uniform with Unix; anonymous pipes cannot be polled.
-    #[allow(clippy::unused_self)]
-    pub fn wait_writable(&self, _timeout: std::time::Duration) -> io::Result<bool> {
-        Err(unsupported("waiting on pseudo-console input"))
+    /// Writes never return `WouldBlock` (they wait while the console is not reading), so a
+    /// writer may always try.
+    // Uniform with Unix, which waits on the descriptor (so not `const`, as the shared wrapper
+    // calling it cannot be).
+    #[allow(
+        clippy::unused_self,
+        clippy::unnecessary_wraps,
+        clippy::missing_const_for_fn
+    )]
+    pub fn wait_writable(&self, _timeout: Duration) -> io::Result<bool> {
+        Ok(true)
     }
 }
 
-/// Never made: a pseudo-console process's streams are all the console.
+/// The read end of a pipe from a process started without the console.
 #[derive(Debug)]
-pub struct PipeReader(std::convert::Infallible);
+pub struct PipeReader {
+    file: File,
+    nonblocking: AtomicBool,
+}
 
-// Signatures are uniform with Unix, where these handles exist.
-#[allow(clippy::needless_pass_by_ref_mut)]
 impl PipeReader {
-    pub const fn read(&mut self, _buffer: &mut [u8]) -> io::Result<usize> {
-        match self.0 {}
+    fn new(handle: OwnedHandle) -> Self {
+        Self {
+            file: File::from(handle),
+            nonblocking: AtomicBool::new(false),
+        }
     }
 
-    pub const fn set_nonblocking(&self, _nonblocking: bool) -> io::Result<()> {
-        match self.0 {}
+    pub fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        read_pipe(
+            &mut self.file,
+            buffer,
+            self.nonblocking.load(Ordering::Acquire),
+        )
     }
 
-    pub const fn wait_readable(&self, _timeout: std::time::Duration) -> io::Result<bool> {
-        match self.0 {}
+    // Fallible on every platform: Unix sets the descriptor's flags.
+    #[allow(clippy::unnecessary_wraps)]
+    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+        self.nonblocking.store(nonblocking, Ordering::Release);
+        Ok(())
+    }
+
+    pub fn wait_readable(&self, timeout: Duration) -> io::Result<bool> {
+        wait_pipe(&self.file, timeout)
     }
 }
 
-/// Never made: a pseudo-console process's streams are all the console.
+/// The write end of a pipe to a process started without the console.
 #[derive(Debug)]
-pub struct PipeWriter(std::convert::Infallible);
+pub struct PipeWriter(File);
 
-// Signatures are uniform with Unix, where these handles exist.
-#[allow(clippy::needless_pass_by_ref_mut)]
 impl PipeWriter {
-    pub const fn write(&mut self, _bytes: &[u8]) -> io::Result<usize> {
-        match self.0 {}
+    pub fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.write(bytes)
     }
 
-    pub const fn flush(&mut self) -> io::Result<()> {
-        match self.0 {}
+    pub fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+/// Processes that end together: a Job Object that kills what it holds when its last handle
+/// closes.
+#[derive(Debug)]
+pub struct Job(OwnedHandle);
+
+impl Job {
+    pub fn new() -> io::Result<Self> {
+        // SAFETY: an unnamed job with default security.
+        let job = unsafe { CreateJobObjectW(null(), null()) };
+        if job.is_null() {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: CreateJobObjectW returned a new handle that nothing else owns.
+        let job = unsafe { OwnedHandle::from_raw_handle(job) };
+        // SAFETY: zeroed is a valid empty limit structure.
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        // SAFETY: the structure outlives the call and its size is passed.
+        if unsafe {
+            SetInformationJobObject(
+                job.as_raw_handle(),
+                JobObjectExtendedLimitInformation,
+                (&raw const limits).cast(),
+                u32::try_from(size_of_val(&limits)).unwrap_or(u32::MAX),
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Self(job))
+    }
+
+    pub fn terminate(&self) -> io::Result<()> {
+        // SAFETY: an owned job handle.
+        if unsafe { TerminateJobObject(self.0.as_raw_handle(), KILLED_EXIT_CODE) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
     }
 }
 
@@ -402,12 +547,23 @@ impl Slave {
         self.start_in(spec, Some(job))
     }
 
+    pub fn spawn_in(&self, spec: &SpawnCommand, job: &Job) -> io::Result<Child> {
+        self.start_in(spec, Some(job.0.as_handle()))
+    }
+
     fn start_in(&self, spec: &SpawnCommand, job: Option<BorrowedHandle<'_>>) -> io::Result<Child> {
-        if spec.stdio() != (Stdio::Terminal, Stdio::Terminal, Stdio::Terminal) {
-            return Err(unsupported(
-                "redirecting a pseudo-console process's streams",
-            ));
-        }
+        // The console on all of the process's streams, or on none: then it runs without it.
+        let stdio: [Stdio; 3] = spec.stdio().into();
+        let streams = match stdio.iter().filter(|s| **s == Stdio::Terminal).count() {
+            3 => None,
+            0 => Some(ChildStreams::new(stdio)?),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "a Windows process has the console on all of its streams or on none",
+                ));
+            }
+        };
         let argv = spec.argv();
         let program = argv
             .first()
@@ -440,15 +596,30 @@ impl Slave {
             environment_block(spec)
         };
         let cwd = working_directory(spec).map(|dir| wide(dir.as_os_str()));
-        start(
+        let attach = streams
+            .as_ref()
+            .map_or(Attach::Console(self.shared.console.0), |streams| {
+                Attach::Streams(streams.child_handles())
+            });
+        let started = start(
             &mut line,
             application.as_deref(),
             &environment,
             cwd.as_deref(),
-            self.shared.console.0,
+            attach,
             job,
-        )
-        .map_err(|error| {
+        );
+        // The process holds its ends now (or never will): only the parent's stay open here.
+        let started = match (started, streams) {
+            (Ok(mut child), Some(streams)) => {
+                child.stdin = streams.stdin;
+                child.stdout = streams.stdout;
+                child.stderr = streams.stderr;
+                Ok(child)
+            }
+            (started, _) => started,
+        };
+        started.map_err(|error| {
             io::Error::new(
                 error.kind(),
                 format!(
@@ -670,13 +841,117 @@ fn environment_block(spec: &SpawnCommand) -> Vec<u16> {
     block
 }
 
-/// Start a process attached to `console`.
+/// What a process is started on.
+#[derive(Clone, Copy)]
+enum Attach {
+    /// The pseudo-console, on all of its standard streams.
+    Console(HPCON),
+    /// These handles (inheritable) as its standard input, output and error, with no console.
+    Streams([RawHandle; 3]),
+}
+
+impl Attach {
+    /// The process's standard input, output and error handles: invalid ones on the console.
+    const fn standard_handles(self) -> [RawHandle; 3] {
+        match self {
+            Self::Console(_) => [INVALID_HANDLE_VALUE; 3],
+            Self::Streams(handles) => handles,
+        }
+    }
+
+    /// Whether the process inherits handles, and its extra creation flags: on its streams
+    /// alone, it inherits them and gets no console of its own.
+    const fn inheritance(self) -> (i32, u32) {
+        match self {
+            Self::Console(_) => (0, 0),
+            Self::Streams(_) => (1, CREATE_NO_WINDOW),
+        }
+    }
+}
+
+/// The standard streams of a process started without the console: the process's ends,
+/// inheritable and closed here once it has started, and this process's ends of its pipes.
+struct ChildStreams {
+    child: [OwnedHandle; 3],
+    stdin: Option<PipeWriter>,
+    stdout: Option<PipeReader>,
+    stderr: Option<PipeReader>,
+}
+
+impl ChildStreams {
+    /// Streams as `stdio` says (none of them the terminal): a pipe, or the null device.
+    fn new([stdin, stdout, stderr]: [Stdio; 3]) -> io::Result<Self> {
+        let (child_in, stdin) = if stdin == Stdio::Piped {
+            let (read, write) = pipe()?;
+            (read, Some(PipeWriter(File::from(write))))
+        } else {
+            (null_device(false)?, None)
+        };
+        let (child_out, stdout) = output_stream(stdout)?;
+        let (child_err, stderr) = output_stream(stderr)?;
+        let child = [child_in, child_out, child_err];
+        for handle in &child {
+            inheritable(handle)?;
+        }
+        Ok(Self {
+            child,
+            stdin,
+            stdout,
+            stderr,
+        })
+    }
+
+    fn child_handles(&self) -> [RawHandle; 3] {
+        [
+            self.child[0].as_raw_handle(),
+            self.child[1].as_raw_handle(),
+            self.child[2].as_raw_handle(),
+        ]
+    }
+}
+
+/// An output stream as `stdio` says: the process's end, and this process's end of a pipe.
+fn output_stream(stdio: Stdio) -> io::Result<(OwnedHandle, Option<PipeReader>)> {
+    if stdio == Stdio::Piped {
+        let (read, write) = pipe()?;
+        Ok((write, Some(PipeReader::new(read))))
+    } else {
+        Ok((null_device(true)?, None))
+    }
+}
+
+/// The null device, opened for writing or reading: reads see end of file, writes are dropped.
+fn null_device(write: bool) -> io::Result<OwnedHandle> {
+    let file = std::fs::OpenOptions::new()
+        .read(!write)
+        .write(write)
+        .open("NUL")?;
+    Ok(OwnedHandle::from(file))
+}
+
+/// Let a started process inherit `handle` (only the handles a start lists are inherited).
+fn inheritable(handle: &OwnedHandle) -> io::Result<()> {
+    // SAFETY: an owned handle.
+    if unsafe {
+        SetHandleInformation(
+            handle.as_raw_handle(),
+            HANDLE_FLAG_INHERIT,
+            HANDLE_FLAG_INHERIT,
+        )
+    } == 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// Start a process attached as `attach` says, in `job` if given.
 fn start(
     line: &mut [u16],
     application: Option<&[u16]>,
     environment: &[u16],
     cwd: Option<&[u16]>,
-    console: HPCON,
+    attach: Attach,
     job: Option<BorrowedHandle<'_>>,
 ) -> io::Result<Child> {
     let count = if job.is_some() { 2 } else { 1 };
@@ -691,19 +966,34 @@ fn start(
     }
     let jobs = job.map(|job| [job.as_raw_handle()]);
     let started = (|| {
-        // SAFETY: the console outlives CreateProcessW below.
-        if unsafe {
-            UpdateProcThreadAttribute(
-                attributes,
-                0,
-                PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE as usize,
-                console as *const core::ffi::c_void,
-                size_of::<HPCON>(),
-                null_mut(),
-                null(),
-            )
-        } == 0
-        {
+        let updated = match &attach {
+            // SAFETY: the console outlives CreateProcessW below.
+            Attach::Console(console) => unsafe {
+                UpdateProcThreadAttribute(
+                    attributes,
+                    0,
+                    PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE as usize,
+                    *console as *const core::ffi::c_void,
+                    size_of::<HPCON>(),
+                    null_mut(),
+                    null(),
+                )
+            },
+            // Only these handles are inherited, whatever else this process left inheritable.
+            // SAFETY: the handle list outlives CreateProcessW below.
+            Attach::Streams(handles) => unsafe {
+                UpdateProcThreadAttribute(
+                    attributes,
+                    0,
+                    PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+                    handles.as_ptr().cast(),
+                    size_of_val(handles),
+                    null_mut(),
+                    null(),
+                )
+            },
+        };
+        if updated == 0 {
             return Err(io::Error::last_os_error());
         }
         // Assigned to the job as it is created, before it can run or start anything.
@@ -726,13 +1016,16 @@ fn start(
         // SAFETY: zeroed is a valid empty startup structure.
         let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
         startup.StartupInfo.cb = u32::try_from(size_of_val(&startup)).unwrap_or(u32::MAX);
-        // Without explicit (invalid) standard handles, a process may inherit this one's
-        // redirected handles instead of using the console.
+        // Without explicit standard handles (invalid ones on the console), a process may
+        // inherit this one's redirected handles instead.
         startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-        startup.StartupInfo.hStdInput = INVALID_HANDLE_VALUE;
-        startup.StartupInfo.hStdOutput = INVALID_HANDLE_VALUE;
-        startup.StartupInfo.hStdError = INVALID_HANDLE_VALUE;
+        [
+            startup.StartupInfo.hStdInput,
+            startup.StartupInfo.hStdOutput,
+            startup.StartupInfo.hStdError,
+        ] = attach.standard_handles();
         startup.lpAttributeList = attributes;
+        let (inherit, flags) = attach.inheritance();
         // SAFETY: zeroed is a valid empty process structure.
         let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
         // SAFETY: every pointer is valid for the call; strings and the block are terminated.
@@ -742,8 +1035,8 @@ fn start(
                 line.as_mut_ptr(),
                 null(),
                 null(),
-                0,
-                EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+                inherit,
+                EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT | flags,
                 environment.as_ptr().cast(),
                 cwd.map_or(null(), <[u16]>::as_ptr),
                 &raw const startup.StartupInfo,
@@ -764,6 +1057,9 @@ fn start(
         Ok(Child {
             process: Arc::new(handle),
             pid: process.dwProcessId,
+            stdin: None,
+            stdout: None,
+            stderr: None,
         })
     })();
     // SAFETY: initialized above and no longer used.
@@ -775,6 +1071,9 @@ fn start(
 pub struct Child {
     process: Arc<OwnedHandle>,
     pid: u32,
+    stdin: Option<PipeWriter>,
+    stdout: Option<PipeReader>,
+    stderr: Option<PipeReader>,
 }
 
 // Signatures are uniform with Unix, which needs exclusive access to wait for and kill a child.
@@ -813,11 +1112,15 @@ impl Child {
     }
 
     pub const fn take_stdin(&mut self) -> Option<PipeWriter> {
-        None
+        self.stdin.take()
     }
 
     pub const fn take_stdout(&mut self) -> Option<PipeReader> {
-        None
+        self.stdout.take()
+    }
+
+    pub const fn take_stderr(&mut self) -> Option<PipeReader> {
+        self.stderr.take()
     }
 
     pub fn as_raw_handle(&self) -> RawHandle {
@@ -1084,7 +1387,6 @@ fn quote(arg: &OsStr, line: &mut Vec<u16>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::windows::io::AsHandle as _;
     use windows_sys::Win32::System::JobObjects::{
         CreateJobObjectW, IsProcessInJob, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
@@ -1220,7 +1522,7 @@ mod tests {
 
     /// A console whose cursor queries are answered, with its output collected.
     fn console() -> (Master, Slave, std::sync::mpsc::Receiver<Vec<u8>>) {
-        let (master, slave) = open(PtySize::new(80, 24)).unwrap();
+        let (master, slave) = open(PtySize::new(80, 24), crate::PtyOptions::default()).unwrap();
         let mut reader = master.try_clone_reader().unwrap();
         let mut input = master.take_writer().unwrap();
         let (sender, receiver) = std::sync::mpsc::channel();

@@ -164,10 +164,7 @@ impl PtyPair {
     /// # Errors
     /// * [`io::Error`] when the system cannot allocate a terminal.
     pub fn open(size: PtySize) -> io::Result<Self> {
-        #[cfg(any(feature = "simulator", not(windows)))]
         let (master, slave) = native::open(size, PtyOptions::default())?;
-        #[cfg(all(windows, not(feature = "simulator")))]
-        let (master, slave) = native::open(size)?;
         Ok(Self {
             slave: PtySlave(slave),
             master: PtyMaster(master),
@@ -178,7 +175,6 @@ impl PtyPair {
     ///
     /// # Errors
     /// * [`io::Error`] when the system cannot allocate a terminal.
-    #[cfg(any(feature = "simulator", not(windows)))]
     pub fn open_with(size: PtySize, options: PtyOptions) -> io::Result<Self> {
         let (master, slave) = native::open(size, options)?;
         Ok(Self {
@@ -343,7 +339,6 @@ impl PtySlave {
     ///
     /// # Errors
     /// As [`Self::spawn`].
-    #[cfg(any(feature = "simulator", not(windows)))]
     pub fn spawn_in(&self, command: &SpawnCommand, job: &PtyJob) -> io::Result<PtyChild> {
         self.0.spawn_in(command, &job.0).map(PtyChild)
     }
@@ -383,11 +378,9 @@ impl PtySlave {
 ///
 /// Windows only ([`Behavior::process_groups`] is false): Unix processes have groups instead
 /// ([`signal_group`]).
-#[cfg(any(feature = "simulator", not(windows)))]
 #[derive(Debug)]
 pub struct PtyJob(native::Job);
 
-#[cfg(any(feature = "simulator", not(windows)))]
 impl PtyJob {
     /// A new, empty job.
     ///
@@ -561,7 +554,6 @@ impl PtyChild {
 
     /// The pipe from the process's standard error, when [`SpawnCommand::stderr`] was
     /// [`Stdio::Piped`]. Available once.
-    #[cfg(any(feature = "simulator", not(windows)))]
     pub fn take_stderr(&mut self) -> Option<PtyPipeReader> {
         self.0.take_stderr().map(PtyPipeReader)
     }
