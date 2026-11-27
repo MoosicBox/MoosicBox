@@ -261,6 +261,53 @@ pub enum Breakpoint {
     },
     /// Whenever the simulation reports a failure (see [`ReplayControl::failure`]).
     Failure,
+    /// At the first decision where the [`Predicate`] of this name holds.
+    When(String),
+}
+
+/// A named condition over a run's state, which a [`Breakpoint::When`] waits for.
+///
+/// A simulation registers its predicates once per process ([`register_predicates`]); an
+/// observer offers them by name. `holds` is called on the run's own thread at each decision
+/// while such a breakpoint is set, so it can read the run's state (its simulators, its
+/// `switchy_simulation` state), but it must not reach a switch point (a simulated lock, a
+/// sleep, anything that yields to the scheduler) and must change nothing.
+#[derive(Debug, Clone, Copy)]
+pub struct Predicate {
+    /// What a breakpoint names it by, one word (`zombie`).
+    pub name: &'static str,
+    /// What it means, for a list (`a process exited and is not reaped`).
+    pub description: &'static str,
+    /// Whether it holds now.
+    pub holds: fn() -> bool,
+}
+
+static PREDICATES: Mutex<Vec<Predicate>> = Mutex::new(Vec::new());
+
+/// Offer `predicates` to breakpoints, in this process. A predicate with a name already
+/// registered replaces it.
+pub fn register_predicates(predicates: &[Predicate]) {
+    let mut registered = PREDICATES.lock().unwrap_or_else(PoisonError::into_inner);
+    for predicate in predicates {
+        registered.retain(|other| other.name != predicate.name);
+        registered.push(*predicate);
+    }
+}
+
+/// The predicates registered in this process, in the order they were registered.
+#[must_use]
+pub fn predicates() -> Vec<Predicate> {
+    PREDICATES
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+}
+
+/// The predicate registered as `name`.
+fn predicate(name: &str) -> Option<Predicate> {
+    predicates()
+        .into_iter()
+        .find(|predicate| predicate.name == name)
 }
 
 impl fmt::Display for Breakpoint {
@@ -271,6 +318,7 @@ impl fmt::Display for Breakpoint {
             Self::Blocked { thread, on } if on.is_empty() => write!(f, "{thread} blocks"),
             Self::Blocked { thread, on } => write!(f, "{thread} blocks on {on}"),
             Self::Failure => f.write_str("a failure"),
+            Self::When(name) => write!(f, "when {name}"),
         }
     }
 }
@@ -414,6 +462,7 @@ impl ReplayControl {
                 })
             }
             Breakpoint::Failure => false,
+            Breakpoint::When(name) => predicate(name).is_some_and(|predicate| (predicate.holds)()),
         })
     }
 
@@ -529,6 +578,32 @@ mod tests {
         assert!(!control.arrive(2, 0, &|| blocked("driver-0", "Io(3)")));
         assert!(!control.arrive(3, 0, &|| blocked("driver-1", "Join(2)")));
         assert!(control.arrive(4, 0, &|| blocked("driver-1", "Io(3)")));
+    }
+
+    #[test]
+    fn a_predicate_breakpoint_pauses_where_it_first_holds() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static HOLDS: AtomicBool = AtomicBool::new(false);
+        register_predicates(&[Predicate {
+            name: "observer-test",
+            description: "the test says so",
+            holds: || HOLDS.load(Ordering::SeqCst),
+        }]);
+        assert!(predicates().iter().any(|p| p.name == "observer-test"));
+        let control = ReplayControl::default();
+        control.add_breakpoint(Breakpoint::When("observer-test".into()));
+        let idle = SchedulerView::default;
+        assert!(!control.arrive(1, 0, &idle));
+        HOLDS.store(true, Ordering::SeqCst);
+        assert!(control.arrive(2, 0, &idle));
+        assert_eq!(
+            control.hit().as_deref(),
+            Some("break at when observer-test")
+        );
+        // An unknown name never holds.
+        control.set(ReplayMode::Run);
+        control.add_breakpoint(Breakpoint::When("no-such".into()));
+        assert!(!control.arrive(3, 0, &idle));
     }
 
     #[test]
