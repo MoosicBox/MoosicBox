@@ -329,6 +329,8 @@ struct ReplayState {
     decision: u64,
     breakpoints: Vec<Breakpoint>,
     hit: Option<String>,
+    /// Whether the last pause was a breakpoint's or a failure's, not a target's.
+    broke: bool,
 }
 
 /// Holds a run at scheduling decisions on an observer's behalf.
@@ -359,6 +361,7 @@ impl ReplayControl {
                 decision: 0,
                 breakpoints: Vec::new(),
                 hit: None,
+                broke: false,
             }),
             changed: Condvar::new(),
         }
@@ -374,6 +377,7 @@ impl ReplayControl {
         state.mode = mode;
         if mode != ReplayMode::Pause {
             state.hit = None;
+            state.broke = false;
         }
         drop(state);
         self.changed.notify_all();
@@ -391,6 +395,14 @@ impl ReplayControl {
     #[must_use]
     pub fn hit(&self) -> Option<String> {
         self.lock().hit.clone()
+    }
+
+    /// Whether the run last paused at a breakpoint or a failure (rather than where it was
+    /// sent), until it runs again. One stepping a decision at a time stops at a breakpoint
+    /// that falls on its target too.
+    #[must_use]
+    pub fn broke(&self) -> bool {
+        self.lock().broke
     }
 
     /// Pause at `breakpoint` too.
@@ -418,8 +430,13 @@ impl ReplayControl {
     pub fn arrive(&self, number: u64, step: u64, view: &dyn Fn() -> SchedulerView) -> bool {
         let mut state = self.lock();
         state.decision = number;
-        let reason = match state.mode {
-            ReplayMode::Pause => return true,
+        if state.mode == ReplayMode::Pause {
+            return true;
+        }
+        // Breakpoints first: a run moved a decision at a time reaches its target at every one.
+        let broke = Self::matching(&state.breakpoints, number, step, view)
+            .map(|index| format!("break at {}", state.breakpoints.remove(index)));
+        let reached = match state.mode {
             ReplayMode::Step(0 | 1) => Some(format!("stepped to decision {number}")),
             ReplayMode::Until(target) if number >= target => {
                 Some(format!("reached decision {target}"))
@@ -428,13 +445,10 @@ impl ReplayControl {
                 state.mode = ReplayMode::Step(left - 1);
                 None
             }
-            ReplayMode::Run | ReplayMode::Until(_) => None,
-        }
-        .or_else(|| {
-            let index = Self::matching(&state.breakpoints, number, step, view)?;
-            Some(format!("break at {}", state.breakpoints.remove(index)))
-        });
-        let Some(reason) = reason else {
+            ReplayMode::Pause | ReplayMode::Run | ReplayMode::Until(_) => None,
+        };
+        state.broke = broke.is_some();
+        let Some(reason) = broke.or(reached) else {
             return false;
         };
         state.mode = ReplayMode::Pause;
@@ -476,6 +490,7 @@ impl ReplayControl {
         }
         state.mode = ReplayMode::Pause;
         state.hit = Some(format!("failure: {what}"));
+        state.broke = true;
         true
     }
 
@@ -564,6 +579,23 @@ mod tests {
             "each breakpoint pauses once"
         );
         assert_eq!(control.breakpoints(), []);
+    }
+
+    #[test]
+    fn a_breakpoint_on_the_target_wins_and_says_so() {
+        let control = ReplayControl::new(ReplayMode::Until(5));
+        control.add_breakpoint(Breakpoint::Decision(5));
+        let idle = SchedulerView::default;
+        assert!(!control.arrive(4, 0, &idle));
+        assert!(!control.broke());
+        assert!(control.arrive(5, 0, &idle));
+        assert!(control.broke());
+        assert_eq!(control.hit().as_deref(), Some("break at decision 5"));
+        // Sent on, it pauses at its next target as a target.
+        control.set(ReplayMode::Until(6));
+        assert!(!control.broke());
+        assert!(control.arrive(6, 0, &idle));
+        assert!(!control.broke());
     }
 
     #[test]
