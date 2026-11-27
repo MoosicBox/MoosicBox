@@ -1,4 +1,4 @@
-//! Exhaustive exploration of a short scenario's schedules, bounded by preemptions.
+//! Exhaustive exploration of a short scenario's schedules, bounded by preemptions or delays.
 //!
 //! [`explore`] runs a scenario again and again, each time replaying a [`Schedule`]: a prefix
 //! of choices, then the default choice everywhere. It enumerates, depth first, every schedule
@@ -8,6 +8,19 @@
 //! within the bound every such choice is explored. Most races need only one or two
 //! preemptions, so a small bound finds every race of a short scenario that is reachable at
 //! all, for certain.
+//!
+//! # Delays
+//!
+//! Where free choices compound (a run with hundreds of choice points, many with several threads
+//! woken at once), not even every schedule without a preemption can be run. A bound on
+//! *delays* ([`Bound::Delays`]; Emmi, Qadeer and Rakamarić, POPL 2011) counts every departure
+//! from the default choice instead, free or not: with one delay, one run per alternative at
+//! each choice point; with two, one per pair. A schedule within `k` preemptions and no other
+//! departure is within `k` delays.
+//!
+//! [`ExploreOptions::window`] confines departures to the choice points after the run calls
+//! [`super::open_window`] (a scenario's setup done, say), so a bound is not spent on what comes
+//! before.
 //!
 //! To know the alternatives at each choice point, every run records its [`Trace`]: at each
 //! decision, the threads that could run, the one picked, and what the thread that stopped
@@ -47,6 +60,9 @@
 //! depends only on what it touches, it would have done the same at the earlier point, so every
 //! schedule picking `t` now is equivalent to one explored in its earlier branch.
 //!
+//! Pruning applies to preemption bounds only: under a delay bound, every departure costs one,
+//! so moving a transition earlier may cost a delay the explored branch did not spend.
+//!
 //! Sleep sets are sound with a preemption bound only when moving `t`'s transition earlier
 //! costs no extra preemption. That holds when `t`'s transition ends with `t` blocked or
 //! finished (switching away from it is then free) and picking `t` at the earlier point cost no
@@ -57,15 +73,29 @@ use std::fmt::Display;
 
 use super::{Config, Schedule, ShutdownReport, ThreadIndex, Trace, run_with};
 
+/// What [`explore`] bounds (see the [module documentation](self)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Bound {
+    /// The most preemptions a schedule may make: switches away from a thread that could have
+    /// gone on.
+    Preemptions(u32),
+    /// The most departures from the default choice a schedule may make.
+    Delays(u32),
+}
+
 /// How [`explore`] searches.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExploreOptions {
-    /// The most preemptions a schedule may make.
-    pub preemptions: u32,
+    /// What a schedule may make at most.
+    pub bound: Bound,
     /// Stop after this many runs, with [`Exploration::complete`] false.
     pub max_runs: Option<usize>,
-    /// Skip schedules that only reorder independent operations (see the module documentation).
+    /// Skip schedules that only reorder independent operations (see the module documentation;
+    /// preemption bounds only).
     pub prune: bool,
+    /// Depart from the default only at choice points after the run calls
+    /// [`super::open_window`].
+    pub window: bool,
 }
 
 impl ExploreOptions {
@@ -73,10 +103,29 @@ impl ExploreOptions {
     #[must_use]
     pub const fn new(preemptions: u32) -> Self {
         Self {
-            preemptions,
+            bound: Bound::Preemptions(preemptions),
             max_runs: None,
             prune: true,
+            window: false,
         }
+    }
+
+    /// Every schedule with at most `delays` departures from the default, without a run limit.
+    #[must_use]
+    pub const fn delays(delays: u32) -> Self {
+        Self {
+            bound: Bound::Delays(delays),
+            max_runs: None,
+            prune: false,
+            window: false,
+        }
+    }
+
+    /// Whether to depart only after the run calls [`super::open_window`].
+    #[must_use]
+    pub const fn window(mut self, window: bool) -> Self {
+        self.window = window;
+        self
     }
 
     /// Stop after `runs` runs.
@@ -195,19 +244,23 @@ pub fn explore_runs(
             );
             return result;
         };
-        if let Err(message) = extend(&mut frames, kept, &trace) {
+        if let Err(message) = extend(&mut frames, kept, &trace, options) {
             fail(&mut result, schedule, message);
             return result;
         }
-        if options.prune && !trace.untracked {
+        let (delays, bound) = match options.bound {
+            Bound::Preemptions(bound) => (false, bound),
+            Bound::Delays(bound) => (true, bound),
+        };
+        if options.prune && !delays && !trace.untracked {
             prune(&mut frames, &trace);
         }
         let mut next = false;
         while let Some(frame) = frames.last_mut() {
-            let bound = options.preemptions;
             let within = |frame: &Frame, thread: ThreadIndex| {
                 !frame.explored.contains(&thread)
-                    && frame.preemptions_before + frame.cost(thread) <= bound
+                    && frame.in_window
+                    && frame.spent_before + frame.cost(thread, delays) <= bound
             };
             if !frame.redundant
                 && let Some(thread) = frame
@@ -270,21 +323,34 @@ struct Frame {
     pruned: Vec<ThreadIndex>,
     /// Everything below an earlier transition already explored: no branch here is new.
     redundant: bool,
-    /// The preemptions of the path before this choice point.
-    preemptions_before: u32,
+    /// What the path spent of the bound before this choice point.
+    spent_before: u32,
+    /// Whether the path may depart here (see [`ExploreOptions::window`]).
+    in_window: bool,
 }
 
 impl Frame {
-    /// The preemptions picking `thread` here costs.
-    fn cost(&self, thread: ThreadIndex) -> u32 {
-        u32::from(self.from_runnable && thread != self.from)
+    /// What picking `thread` here spends of the bound: a delay for any departure from the
+    /// default, a preemption for switching away from a thread that could go on.
+    fn cost(&self, thread: ThreadIndex, delays: bool) -> u32 {
+        if delays {
+            u32::from(thread != self.default)
+        } else {
+            u32::from(self.from_runnable && thread != self.from)
+        }
     }
 }
 
 /// Check that a run followed the kept path, and add frames for its choice points beyond it.
-fn extend(frames: &mut Vec<Frame>, kept: usize, trace: &Trace) -> Result<(), String> {
+fn extend(
+    frames: &mut Vec<Frame>,
+    kept: usize,
+    trace: &Trace,
+    options: &ExploreOptions,
+) -> Result<(), String> {
+    let delays = matches!(options.bound, Bound::Delays(_));
     let mut index = 0;
-    let mut preemptions = 0;
+    let mut spent = 0;
     for (decision, step) in trace.steps.iter().enumerate() {
         if step.runnable.len() < 2 {
             continue;
@@ -307,7 +373,7 @@ fn extend(frames: &mut Vec<Frame>, kept: usize, trace: &Trace) -> Result<(), Str
                      is not deterministic"
                 ));
             }
-            preemptions = frame.preemptions_before + frame.cost(frame.chosen);
+            spent = frame.spent_before + frame.cost(frame.chosen, delays);
         } else {
             if step.to != default {
                 return Err(format!(
@@ -325,7 +391,8 @@ fn extend(frames: &mut Vec<Frame>, kept: usize, trace: &Trace) -> Result<(), Str
                 explored: vec![default],
                 pruned: Vec::new(),
                 redundant: false,
-                preemptions_before: preemptions,
+                spent_before: spent,
+                in_window: !options.window || trace.window.is_some_and(|window| decision >= window),
             });
         }
         index += 1;
@@ -374,7 +441,7 @@ fn prune(frames: &mut [Frame], trace: &Trace) {
                     && f.decision < p
                     && f.chosen != thread
                     && f.explored.contains(&thread)
-                    && f.cost(thread) <= f.cost(f.chosen)
+                    && f.cost(thread, false) <= f.cost(f.chosen, false)
             })
             .map(|f| f.decision)
         else {

@@ -56,6 +56,59 @@ fn a_lost_update_needs_a_preemption() {
     assert!(exploration.complete);
 }
 
+#[test]
+fn a_lost_update_is_found_within_one_delay() {
+    for seed in 0..4 {
+        let exploration =
+            simulator::explore(seed, &ExploreOptions::delays(1), || racy_increments(2, 1));
+        let failure = exploration
+            .failure
+            .unwrap_or_else(|| panic!("not found (seed {seed})"));
+        assert!(failure.message.contains("lost updates: 1 of 2"));
+        assert_eq!(failure.schedule.choices.len(), 1);
+    }
+}
+
+#[test]
+fn no_delays_is_the_default_schedule_alone() {
+    let exploration = simulator::explore(0, &ExploreOptions::delays(0), || racy_increments(2, 1));
+    assert_eq!(exploration.failure, None);
+    assert!(exploration.complete);
+    assert_eq!(exploration.runs, 1);
+}
+
+#[test]
+fn departures_wait_for_the_window() {
+    // Opened before the race: found.
+    let opened_first = simulator::explore(0, &ExploreOptions::delays(1).window(true), || {
+        simulator::open_window();
+        racy_increments(2, 1)
+    });
+    assert!(opened_first.failure.is_some());
+    // Opened after it: only the default schedule (the race needs a departure).
+    let opened_after = simulator::explore(0, &ExploreOptions::delays(2).window(true), || {
+        racy_increments(2, 1)?;
+        simulator::open_window();
+        Ok::<(), String>(())
+    });
+    assert_eq!(opened_after.failure, None);
+    assert!(opened_after.complete);
+    assert_eq!(opened_after.runs, 1);
+    // Never opened: the same.
+    let never = simulator::explore(0, &ExploreOptions::delays(2).window(true), || {
+        racy_increments(2, 1)
+    });
+    assert_eq!((never.failure, never.runs), (None, 1));
+}
+
+#[test]
+fn a_delay_bound_covers_its_preemption_bound() {
+    // Every schedule within k preemptions and no other departure is within k delays, so the
+    // races two preemptions find, two delays find too.
+    let two = simulator::explore(0, &ExploreOptions::delays(2), three_stale_loads);
+    assert!(two.failure.is_some());
+}
+
 /// Three threads each increment a counter with a separate load and store; fails when all
 /// three loaded 0 (each loaded before any stored), which needs two preemptions: one alone
 /// lets the others finish (losing two updates, but not with three stale loads).

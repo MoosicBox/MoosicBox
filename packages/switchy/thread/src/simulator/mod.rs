@@ -40,7 +40,7 @@ use std::{
 
 pub use coverage::{Coverage, Site};
 pub use explore::{
-    Exploration, ExploreFailure, ExploreOptions, ExploredRun, explore, explore_runs,
+    Bound, Exploration, ExploreFailure, ExploreOptions, ExploredRun, explore, explore_runs,
 };
 pub use switchy_simulation::Context;
 
@@ -510,6 +510,8 @@ pub struct Trace {
     /// The run used something whose effects the scheduler does not track (switch points or
     /// wakeups from outside this crate, killing, weak memory): no transition of it commutes.
     pub(crate) untracked: bool,
+    /// The decision from which an exploration may depart, once the run called [`open_window`].
+    pub(crate) window: Option<usize>,
 }
 
 impl Trace {
@@ -523,6 +525,18 @@ impl Trace {
     #[must_use]
     pub fn choice_points(&self) -> usize {
         self.steps.iter().filter(|s| s.runnable.len() > 1).count()
+    }
+
+    /// The choice points from the one where the run called [`open_window`] on (none if it never
+    /// did).
+    #[must_use]
+    pub fn choice_points_in_window(&self) -> usize {
+        self.window.map_or(0, |window| {
+            self.steps[window.min(self.steps.len())..]
+                .iter()
+                .filter(|s| s.runnable.len() > 1)
+                .count()
+        })
     }
 
     /// Whether the run used something the scheduler does not track, so that exploring it
@@ -769,6 +783,7 @@ impl Scheduler {
                 trace: tracing.then(|| Trace {
                     steps: Vec::new(),
                     untracked: weak_memory,
+                    window: None,
                 }),
                 coverage: covering.then(coverage::Recorder::default),
             }),
@@ -956,6 +971,17 @@ impl Scheduler {
     pub fn decisions(&self) -> u64 {
         self.touch_any();
         lock(&self.inner).decisions
+    }
+
+    /// Open the exploration window: an exploration with [`ExploreOptions::window`] departs
+    /// from the default only at choice points from here on. Only the first call counts, and
+    /// it does nothing unless the run records its trace.
+    pub fn open_window(&self) {
+        if let Some(trace) = &mut lock(&self.inner).trace
+            && trace.window.is_none()
+        {
+            trace.window = Some(trace.steps.len());
+        }
     }
 
     /// Mix an observable value of the run (an output, an event) into the trace hash, so a
@@ -1705,6 +1731,14 @@ pub struct ShutdownReport {
 #[must_use]
 pub fn scheduler() -> Arc<Scheduler> {
     Scheduler::current()
+}
+
+/// Open the current run's exploration window, if it is a simulated run; see
+/// [`Scheduler::open_window`].
+pub fn open_window() {
+    if let Some(scheduler) = try_scheduler() {
+        scheduler.open_window();
+    }
 }
 
 /// The current run's scheduler, if the calling OS thread is one of its simulated threads.
