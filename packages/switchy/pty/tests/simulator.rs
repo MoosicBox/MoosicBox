@@ -114,6 +114,53 @@ fn typed_input_is_echoed_and_read_by_the_program() {
 }
 
 #[test]
+fn the_terminal_output_record_is_what_the_master_reads() {
+    for personality in [Personality::Linux, Personality::Windows] {
+        let (read, output, written) = run(1, personality, || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let mut child = slave.spawn(&SpawnCommand::new("cat")).unwrap();
+            let terminal = simulator::process_io(child.id())
+                .and_then(|io| io.terminal)
+                .unwrap();
+            drop(slave);
+            let mut writer = master.take_writer().unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            if personality == Personality::Windows {
+                // The console holds output until its cursor query is answered.
+                let mut query = [0; 4];
+                reader.read_exact(&mut query).unwrap();
+                writer.write_all(b"\x1b[1;1R").unwrap();
+            }
+            writer.write_all(b"hi\r").unwrap();
+            drop(writer);
+            child.wait().unwrap();
+            let mut read = if personality == Personality::Windows {
+                b"\x1b[6n".to_vec()
+            } else {
+                Vec::new()
+            };
+            let mut chunk = vec![0; 256];
+            let count = reader.read(&mut chunk).unwrap();
+            read.extend_from_slice(&chunk[..count]);
+            (
+                read,
+                simulator::terminal_output(&terminal).unwrap(),
+                simulator::terminal_written(&terminal).unwrap(),
+            )
+        });
+        // What was read, echoes included, is where the record starts.
+        assert!(
+            output.starts_with(&read) && String::from_utf8_lossy(&read).contains("hi\r\n"),
+            "{personality:?}: read {:?} of {:?}",
+            String::from_utf8_lossy(&read),
+            String::from_utf8_lossy(&output),
+        );
+        // What the program wrote is only part of it.
+        assert!(output.len() > written.len(), "{personality:?}");
+    }
+}
+
+#[test]
 fn typed_lines_are_edited_and_read_a_line_at_a_time() {
     for personality in [Personality::Linux, Personality::MacOs] {
         let output = run(2, personality, || {

@@ -341,9 +341,18 @@ struct Terminal {
     icrnl: bool,
     icanon: bool,
     written: Vec<u8>,
+    /// Every byte that entered the master side's output, in order: what processes wrote (as
+    /// translated), echoes, and the console's own query.
+    produced: Vec<u8>,
 }
 
 impl Terminal {
+    /// Add `bytes` to what the master side can read.
+    fn emit(&mut self, bytes: &[u8]) {
+        self.output.extend(bytes);
+        self.produced.extend_from_slice(bytes);
+    }
+
     /// Whether reading the master side is at its end once its output is read: nothing holds
     /// the slave side (or it hung up); on Windows, the console was closed.
     const fn output_ended(&self) -> bool {
@@ -403,7 +412,7 @@ impl Terminal {
         if self.awaiting_report {
             self.held_echo.extend_from_slice(bytes);
         } else {
-            self.output.extend(bytes);
+            self.emit(bytes);
         }
     }
 
@@ -411,7 +420,7 @@ impl Terminal {
     fn release_held(&mut self) {
         self.awaiting_report = false;
         let held = std::mem::take(&mut self.held_echo);
-        self.output.extend(held);
+        self.emit(&held);
     }
 
     /// Take one typed byte through canonical editing.
@@ -672,6 +681,22 @@ pub fn terminal_written(name: &str) -> Option<Vec<u8>> {
         .values()
         .find(|t| t.name == name)
         .map(|t| t.written.clone())
+}
+
+/// Every byte the master side of the terminal at simulated path `name` was given to read.
+///
+/// In order: what processes wrote (as the terminal translated it), what it echoed of what was
+/// typed, and (Windows) the console's own cursor query. What a reader of the master side read
+/// is always a prefix of it.
+#[must_use]
+pub fn terminal_output(name: &str) -> Option<Vec<u8>> {
+    let kernel = kernel();
+    let state = lock(&kernel.state);
+    state
+        .terminals
+        .values()
+        .find(|t| t.name == name)
+        .map(|t| t.produced.clone())
 }
 
 /// Where a process's terminal output and piped standard output went, kept after it is reaped.
@@ -970,7 +995,7 @@ impl Kernel {
                     Later::CursorQuery { terminal } => {
                         // The console has held its programs' output since it opened.
                         if let Some(t) = state.terminals.get_mut(&terminal) {
-                            t.output.extend(CURSOR_QUERY);
+                            t.emit(CURSOR_QUERY);
                         }
                     }
                 }
@@ -1514,16 +1539,13 @@ impl Kernel {
         } else {
             (true, true)
         };
+        let query: &[u8] = if query { CURSOR_QUERY } else { &[] };
         state.terminals.insert(
             id,
             Terminal {
                 name: format!("/dev/simpts/{id}"),
                 size,
-                output: if query {
-                    CURSOR_QUERY.iter().copied().collect()
-                } else {
-                    VecDeque::new()
-                },
+                output: query.iter().copied().collect(),
                 input: VecDeque::new(),
                 line: Vec::new(),
                 capacity,
@@ -1546,6 +1568,7 @@ impl Kernel {
                 icrnl: true,
                 icanon: true,
                 written: Vec::new(),
+                produced: query.to_vec(),
             },
         );
         drop(state);
@@ -2026,7 +2049,7 @@ impl Process {
                             if t.output.len() + translated.len() > t.capacity {
                                 break;
                             }
-                            t.output.extend(translated);
+                            t.emit(translated);
                             t.written.extend(translated);
                             written += 1;
                         }
